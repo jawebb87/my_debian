@@ -1,0 +1,181 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# termplay - Terminal Streaming Video Player
+# ==============================================================================
+# Streams web video (YouTube, Twitch, etc.) or local files directly inside
+# the Kitty terminal window using the Kitty Graphics Protocol via mpv + yt-dlp.
+# ==============================================================================
+
+set -eo pipefail
+
+# ANSI Colors (Gruvbox)
+COLOR_RESET="\033[0m"
+COLOR_BOLD="\033[1m"
+COLOR_YELLOW="\033[38;2;250;189;47m"
+COLOR_GREEN="\033[38;2;184;187;38m"
+COLOR_BLUE="\033[38;2;131;165;152m"
+COLOR_RED="\033[38;2;251;73;52m"
+COLOR_AQUA="\033[38;2;142;192;124m"
+COLOR_GRAY="\033[38;2;146;131;116m"
+
+print_banner() {
+    echo -e "${COLOR_YELLOW}${COLOR_BOLD}▶ termplay${COLOR_RESET} ${COLOR_GRAY}- Terminal Video Player${COLOR_RESET}"
+}
+
+usage() {
+    print_banner
+    cat << EOF
+Usage:
+  termplay [options] <URL | search query>
+  termplay [options]               (plays URL from clipboard or prompts)
+
+Options:
+  -a, --audio         Audio-only mode (no video output)
+  -q, --quality RES   Set max vertical resolution (default: 720) [e.g. 480, 720, 1080]
+  -w, --window        Open in dedicated floating window instead of terminal
+  -h, --help          Show this help message
+
+In-Player Controls (mpv):
+  [SPACE]             Pause / Resume
+  [Left] / [Right]    Seek -5s / +5s
+  [Up] / [Down]       Seek +60s / -60s
+  [9] / [0]           Volume down / up
+  [m]                 Toggle mute
+  [q]                 Quit playback
+EOF
+    exit 0
+}
+
+check_dependencies() {
+    local missing=()
+    if ! command -v mpv &>/dev/null; then
+        missing+=("mpv")
+    fi
+    if ! command -v yt-dlp &>/dev/null; then
+        missing+=("yt-dlp")
+    fi
+
+    if [ ${#missing[@]} -gt 0 ]; then
+        echo -e "${COLOR_RED}Error:${COLOR_RESET} Missing required tools: ${COLOR_YELLOW}${missing[*]}${COLOR_RESET}"
+        echo -e "Install them via apt:"
+        echo -e "  ${COLOR_GREEN}sudo apt update && sudo apt install -y ${missing[*]}${COLOR_RESET}\n"
+        exit 1
+    fi
+}
+
+AUDIO_ONLY=false
+WINDOW_MODE=false
+MAX_HEIGHT=720
+QUERY_ARGS=()
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -a|--audio)
+            AUDIO_ONLY=true
+            shift
+            ;;
+        -w|--window)
+            WINDOW_MODE=true
+            shift
+            ;;
+        -q|--quality)
+            MAX_HEIGHT="$2"
+            shift 2
+            ;;
+        -720)
+            MAX_HEIGHT=720
+            shift
+            ;;
+        -1080)
+            MAX_HEIGHT=1080
+            shift
+            ;;
+        -480)
+            MAX_HEIGHT=480
+            shift
+            ;;
+        -h|--help)
+            usage
+            ;;
+        *)
+            QUERY_ARGS+=("$1")
+            shift
+            ;;
+    esac
+done
+
+check_dependencies
+
+TARGET=""
+
+# 1. Check if argument was provided
+if [ ${#QUERY_ARGS[@]} -gt 0 ]; then
+    TARGET="${QUERY_ARGS[*]}"
+else
+    # 2. Check clipboard
+    CLIP_CONTENT=""
+    if command -v xclip &>/dev/null; then
+        CLIP_CONTENT=$(xclip -selection clipboard -o 2>/dev/null || true)
+    elif command -v xsel &>/dev/null; then
+        CLIP_CONTENT=$(xsel -b -o 2>/dev/null || true)
+    fi
+
+    if [[ "$CLIP_CONTENT" =~ ^https?:// ]]; then
+        echo -e "${COLOR_BLUE}Found URL in clipboard:${COLOR_RESET} $CLIP_CONTENT"
+        read -r -p "Play this URL? [Y/n]: " CONFIRM
+        CONFIRM=${CONFIRM:-Y}
+        if [[ "$CONFIRM" =~ ^[Yy]$ ]]; then
+            TARGET="$CLIP_CONTENT"
+        fi
+    fi
+
+    # 3. If still no target, prompt user
+    if [ -z "$TARGET" ]; then
+        echo -e "${COLOR_YELLOW}Enter video URL or search query:${COLOR_RESET} "
+        read -r -p "> " TARGET
+    fi
+fi
+
+if [ -z "$TARGET" ]; then
+    echo -e "${COLOR_RED}No URL or query provided. Exiting.${COLOR_RESET}"
+    exit 1
+fi
+
+# Detect if input is a URL or search query
+if [[ ! "$TARGET" =~ ^https?:// ]] && [[ ! -f "$TARGET" ]]; then
+    echo -e "${COLOR_AQUA}Searching YouTube for:${COLOR_RESET} $TARGET"
+    TARGET="ytdl://ytsearch:$TARGET"
+else
+    echo -e "${COLOR_AQUA}Loading media:${COLOR_RESET} $TARGET"
+fi
+
+# Determine video output driver
+MPV_VO_OPTS=()
+if [ "$AUDIO_ONLY" = true ]; then
+    MPV_VO_OPTS+=("--no-video")
+elif [ "$WINDOW_MODE" = true ]; then
+    MPV_VO_OPTS+=("--vo=gpu" "--force-window=yes")
+else
+    # Check if running in Kitty
+    if [ -n "$KITTY_WINDOW_ID" ] || [ "$TERM" = "xterm-kitty" ]; then
+        MPV_VO_OPTS+=("--vo=kitty" "--vo-kitty-use-shm=yes" "--force-window=no")
+    else
+        # Fallback to sixel or terminal text if not inside Kitty
+        MPV_VO_OPTS+=("--vo=sixel,tct" "--force-window=no")
+    fi
+fi
+
+# Format selection (respect max resolution and prefer best audio)
+YTDL_FORMAT="bestvideo[height<=?${MAX_HEIGHT}]+bestaudio/best"
+
+echo -e "${COLOR_GRAY}Starting playback... (Press 'q' to quit, 'space' to pause)${COLOR_RESET}\n"
+
+exec mpv \
+    "${MPV_VO_OPTS[@]}" \
+    --ytdl-format="$YTDL_FORMAT" \
+    --ytdl-raw-options=extractor-args="youtube:player_client=android" \
+    --script-opts=ytdl_hook-ytdl_path="${HOME}/.local/bin/yt-dlp" \
+    --terminal=yes \
+    --msg-level=all=warn,statusline=status \
+    "$TARGET"
+
