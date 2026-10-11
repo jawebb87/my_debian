@@ -53,11 +53,13 @@ kate
 docker-compose
 docker.io
 
-# --- Audio & Multimedia (PipeWire) ---
+# --- Audio & Multimedia (PipeWire & Playback) ---
+mpv
 pipewire-alsa
 pipewire-audio
 pipewire-pulse
 wireplumber
+yt-dlp
 
 # --- Fonts & Icons ---
 fonts-font-awesome

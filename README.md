@@ -38,7 +38,7 @@ dotfiles/
 ├── micro/              # .config/micro/ (bindings.json)
 ├── gtk/                # .config/gtk-3.0/, .config/gtk-4.0/
 ├── power/              # .config/ (power-limits.service, power-limits-sleep.sh)
-├── bin/                # .local/bin/ (qtile-screenshot, apply-power-limits.sh)
+├── bin/                # .local/bin/ (qtile-screenshot, apply-power-limits.sh, termplay)
 └── scripts/            # Custom utility scripts (vim_cheat.py, docker_pad.py, clip_pad.py)
 ```
 
@@ -108,3 +108,11 @@ chmod +x install.sh
 * **`Super + x`**: Toggles custom Python/Tkinter Clipboard history scratchpad (`~/Projects/qtile_bench/clip_pad.py`) with live sync, format detection, and quick copy/delete.
 * **`Super + y`**: Raise or run Limusic YouTube Music player AppImage (`~/.local/bin/limusic.AppImage`).
 * **`Super + t`**: Toggles `btop` system monitor dropdown.
+
+### 5. Terminal Video Player (`termplay` / `play`)
+Stream web videos (YouTube, Twitch, etc.) or local files directly inside any Kitty terminal pane using Kitty Graphics Protocol:
+* `play <URL>`: Stream video directly in terminal pane.
+* `play <search query>`: Search YouTube and stream matching result.
+* `play`: Auto-detects URL from clipboard or prompts.
+* `play -a <URL>`: Audio-only stream.
+* In-player controls: `Space` (pause), `Left`/`Right` (seek 5s), `9`/`0` (volume), `q` (quit).
