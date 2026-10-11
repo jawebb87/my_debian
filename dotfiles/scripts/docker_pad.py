@@ -242,6 +242,14 @@ class DockerPadApp:
         except Exception:
             pass
 
+        # Set initial dimensions to match Qtile DropDown proportions
+        sw = self.root.winfo_screenwidth()
+        sh = self.root.winfo_screenheight()
+        target_w = int(sw * 0.8)
+        target_h = int(sh * 0.88)
+        self.root.geometry(f"{target_w}x{target_h}")
+        self.root.minsize(target_w, target_h)
+
         self.containers = []
         self.cards = []
         self.selected_index = 0
