@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+set -e
+
+# Target directory
+TARGET_DIR="${HOME}/Pictures/Screenshots"
+mkdir -p "${TARGET_DIR}"
+
+TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
+FILENAME="${TARGET_DIR}/${TIMESTAMP}.png"
+
+MODE="${1:-full}"
+
+case "${MODE}" in
+    full)
+        scrot "${FILENAME}"
+        ;;
+    window)
+        scrot -u -b "${FILENAME}"
+        ;;
+    region)
+        scrot -s -f "${FILENAME}"
+        ;;
+    *)
+        scrot "${FILENAME}"
+        ;;
+esac
+
+if [ -f "${FILENAME}" ]; then
+    xclip -selection clipboard -target image/png -i "${FILENAME}"
+    if command -v notify-send >/dev/null 2>&1; then
+        notify-send -i camera-photo "Screenshot Taken" "Saved to ${FILENAME} and copied to clipboard"
+    fi
+fi

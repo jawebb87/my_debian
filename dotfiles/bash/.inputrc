@@ -1,0 +1,15 @@
+    # Case-insensitive tab completion
+    set completion-ignore-case on
+    
+    # Show all completions on first Tab press without beeping
+    set show-all-if-ambiguous on
+    set show-all-if-unmodified on
+
+    # Colorize completion suggestions (directories, executables, etc.)
+    set colored-stats on
+    set colored-completion-prefix on
+
+    # Fish-style prefix search with Up / Down arrows:
+    # Type "git " and hit Up to cycle only through past git commands
+    "\e[A": history-search-backward
+    "\e[B": history-search-forward

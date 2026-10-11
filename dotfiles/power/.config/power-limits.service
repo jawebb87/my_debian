@@ -1,0 +1,11 @@
+[Unit]
+Description=Set Battery Charge Limit to 80%, Disable Boost, and Cap CPU to 1.7 GHz
+After=multi-user.target suspend.target hibernate.target
+
+[Service]
+Type=oneshot
+ExecStart=/home/jaws/.local/bin/apply-power-limits.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

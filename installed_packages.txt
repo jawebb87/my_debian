@@ -1,0 +1,89 @@
+# ==============================================================================
+# My Debian Package List
+# ==============================================================================
+# This curated list contains the explicitly chosen packages for this build.
+# APT automatically resolves all underlying libraries (libc, libssl, etc.).
+#
+# To install on a fresh Debian system:
+#   grep -vE '^\s*(#|$)' installed_packages.txt | sudo xargs apt install -y
+# ==============================================================================
+
+# --- Desktop & Window Management ---
+dunst
+lightdm
+picom
+polkit-kde-agent-1
+qtile
+rofi
+scrot
+suckless-tools
+xclip
+xsel
+xserver-xorg
+
+# --- Terminal & CLI Utilities ---
+bash-completion
+bat
+bind9-dnsutils
+btop
+curl
+dmidecode
+eza
+git
+inetutils-telnet
+kitty
+lsof
+make
+micro
+netcat-traditional
+pciutils
+ripgrep
+traceroute
+usbutils
+w3m
+w3m-img
+wget
+
+# --- GUI Applications ---
+dolphin
+firefox-esr
+kate
+
+# --- Containers & Virtualization ---
+docker-compose
+docker.io
+
+# --- Audio & Multimedia (PipeWire) ---
+pipewire-alsa
+pipewire-audio
+pipewire-pulse
+wireplumber
+
+# --- Fonts & Icons ---
+fonts-font-awesome
+fonts-noto-color-emoji
+fonts-powerline
+
+# --- Python Stack (Qtile & Cheatsheet) ---
+python3-cffi
+python3-psutil
+python3-tk
+
+# --- Security, Firewall & System Utilities ---
+ca-certificates
+cron
+gnupg
+logrotate
+openssh-client
+sudo
+ufw
+vim
+
+# --- Hardware Drivers, Boot & Firmware (AMD TUF FX505) ---
+amd64-microcode
+firmware-amd-graphics
+firmware-realtek
+grub-efi-amd64
+linux-image-amd64
+os-prober
+shim-signed
