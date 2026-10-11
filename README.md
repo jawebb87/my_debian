@@ -39,7 +39,7 @@ dotfiles/
 ├── gtk/                # .config/gtk-3.0/, .config/gtk-4.0/
 ├── power/              # .config/ (power-limits.service, power-limits-sleep.sh)
 ├── bin/                # .local/bin/ (qtile-screenshot, apply-power-limits.sh)
-└── scripts/            # Custom utility scripts (vim_cheat.py)
+└── scripts/            # Custom utility scripts (vim_cheat.py, docker_pad.py)
 ```
 
 ---
@@ -60,7 +60,7 @@ chmod +x install.sh
    for dir in dotfiles/*; do
      [ -d "$dir" ] && [ "$(basename "$dir")" != "scripts" ] && cp -a "$dir"/. "$HOME"/
    done
-   cp -a dotfiles/scripts/vim_cheat.py "$HOME/Projects/qtile_bench/"
+   cp -a dotfiles/scripts/{vim_cheat.py,docker_pad.py} "$HOME/Projects/qtile_bench/"
    ```
 
 2. **Or Symlink via GNU Stow**:
@@ -102,6 +102,7 @@ chmod +x install.sh
 * **`~/.inputrc`**: Adds prefix history search with `Up` / `Down` arrows.
 * **`bind Space:magic-space`**: Automatically expands aliases like Fish abbreviations.
 
-### 4. Custom Qtile Scratchpads (`Super + v` & `Super + t`)
+### 4. Custom Qtile Scratchpads (`Super + v`, `Super + d` & `Super + t`)
 * **`Super + v`**: Toggles custom Python/Tkinter Vim cheatsheet (`~/Projects/qtile_bench/vim_cheat.py`) dropping down flush from the 26px top bar.
+* **`Super + d`**: Toggles custom Python/Tkinter Docker services dashboard (`~/Projects/qtile_bench/docker_pad.py`) with live status, restart/stop/start hotkeys, and container log inspection.
 * **`Super + t`**: Toggles `btop` system monitor dropdown.

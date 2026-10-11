@@ -32,11 +32,13 @@ copy_dotfiles() {
         fi
     done
 
-    # Ensure vim cheatsheet is in Projects/qtile_bench
-    if [ -f "$DOTFILES_DIR/scripts/vim_cheat.py" ]; then
-        cp -a "$DOTFILES_DIR/scripts/vim_cheat.py" "$HOME/Projects/qtile_bench/"
-        chmod +x "$HOME/Projects/qtile_bench/vim_cheat.py"
-    fi
+    # Ensure scratchpad scripts are in Projects/qtile_bench
+    for script in vim_cheat.py docker_pad.py; do
+        if [ -f "$DOTFILES_DIR/scripts/$script" ]; then
+            cp -a "$DOTFILES_DIR/scripts/$script" "$HOME/Projects/qtile_bench/"
+            chmod +x "$HOME/Projects/qtile_bench/$script"
+        fi
+    done
 
     # Ensure local bin scripts are executable
     chmod +x "$HOME/.local/bin/"* 2>/dev/null || true
@@ -60,10 +62,12 @@ stow_dotfiles() {
         fi
     done
 
-    if [ -f "$DOTFILES_DIR/scripts/vim_cheat.py" ]; then
-        ln -sf "$DOTFILES_DIR/scripts/vim_cheat.py" "$HOME/Projects/qtile_bench/vim_cheat.py"
-        chmod +x "$DOTFILES_DIR/scripts/vim_cheat.py"
-    fi
+    for script in vim_cheat.py docker_pad.py; do
+        if [ -f "$DOTFILES_DIR/scripts/$script" ]; then
+            ln -sf "$DOTFILES_DIR/scripts/$script" "$HOME/Projects/qtile_bench/$script"
+            chmod +x "$DOTFILES_DIR/scripts/$script"
+        fi
+    done
 
     echo "✓ Dotfiles symlinked successfully via Stow!"
 }
