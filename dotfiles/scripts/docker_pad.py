@@ -19,6 +19,7 @@ import sys
 import os
 import json
 import time
+import shlex
 import subprocess
 import threading
 import tkinter as tk
@@ -55,7 +56,7 @@ def run_docker(cmd_args: list[str]) -> subprocess.CompletedProcess:
     needs_sg = os.path.exists(sock_path) and not os.access(sock_path, os.R_OK | os.W_OK)
 
     if needs_sg:
-        cmd_str = "docker " + " ".join(cmd_args)
+        cmd_str = "docker " + " ".join(shlex.quote(arg) for arg in cmd_args)
         return subprocess.run(
             ["sg", "docker", "-c", cmd_str],
             capture_output=True,
@@ -204,7 +205,9 @@ class ContainerCard:
                 parts = p.split("->")
                 host = parts[0].replace("0.0.0.0:", "").replace(":::", "").replace("127.0.0.1:", "local:")
                 container = parts[1].replace("/tcp", "").replace("/udp", "")
-                clean.append(f"{host}→{container}")
+                mapping = f"{host}→{container}"
+                if mapping not in clean:
+                    clean.append(mapping)
         return ", ".join(clean) if clean else ports[:40]
 
     def _bind_clicks(self):
@@ -453,8 +456,13 @@ class DockerPadApp:
             try:
                 # 1. Fetch container list
                 res = run_docker(["ps", "-a", "--format", "{{json .}}"])
+                if res.returncode != 0:
+                    err_msg = res.stderr.strip() or f"Docker exited with code {res.returncode}"
+                    self.root.after(0, lambda: self.show_toast(f"Error: {err_msg}", THEME["status_stopped"]))
+                    return
+
                 containers = []
-                if res.returncode == 0 and res.stdout.strip():
+                if res.stdout.strip():
                     for line in res.stdout.strip().split("\n"):
                         if line.strip():
                             try:
