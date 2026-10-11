@@ -33,7 +33,7 @@ copy_dotfiles() {
     done
 
     # Ensure scratchpad scripts are in Projects/qtile_bench
-    for script in vim_cheat.py docker_pad.py; do
+    for script in vim_cheat.py docker_pad.py clip_pad.py; do
         if [ -f "$DOTFILES_DIR/scripts/$script" ]; then
             cp -a "$DOTFILES_DIR/scripts/$script" "$HOME/Projects/qtile_bench/"
             chmod +x "$HOME/Projects/qtile_bench/$script"
@@ -62,7 +62,7 @@ stow_dotfiles() {
         fi
     done
 
-    for script in vim_cheat.py docker_pad.py; do
+    for script in vim_cheat.py docker_pad.py clip_pad.py; do
         if [ -f "$DOTFILES_DIR/scripts/$script" ]; then
             ln -sf "$DOTFILES_DIR/scripts/$script" "$HOME/Projects/qtile_bench/$script"
             chmod +x "$DOTFILES_DIR/scripts/$script"
