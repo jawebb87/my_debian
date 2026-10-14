@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# qtile-notes: Quick Note-Taking Dropdown Wrapper for Qtile
+# ==============================================================================
+# Opens Vim with the file ~/notes/{year}{month}{day}_{time}.md for general note-taking.
+# Format: YYYYMMDD_HHMMSS (e.g. ~/notes/20261012_135500.md)
+
+set -e
+
+NOTES_DIR="$HOME/notes"
+mkdir -p "$NOTES_DIR"
+
+# Allow opening a specific note if passed as argument, otherwise generate timestamped note
+if [ -n "$1" ]; then
+    NOTE_FILE="$1"
+else
+    TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+    NOTE_FILE="${NOTES_DIR}/${TIMESTAMP}.md"
+fi
+
+exec vim "$NOTE_FILE"

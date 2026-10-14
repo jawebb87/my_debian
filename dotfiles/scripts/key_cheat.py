@@ -15,32 +15,28 @@ Features:
 """
 
 import sys
+import os
 import tkinter as tk
 from tkinter import font as tkfont
 
 # ==============================================================================
-# Theme: Gruvbox Dark (matching Qtile & Ghostty/Kitty config)
+# Theme: Central Gruvbox (Dark / Light via Super + o)
 # ==============================================================================
-THEME = {
-    "bg": "#282828",           # Dark0 background
-    "bg_surface": "#32302f",   # Dark0_soft surface
-    "bg_card": "#3c3836",      # Dark1 container
-    "bg_hover": "#504945",     # Dark2 hover
-    "bg_active": "#665c54",    # Dark3 active selection
-    "fg": "#ebdbb2",           # Light1 main text
-    "fg_dim": "#a89984",       # Light4 muted text
-    "fg_header": "#fbf1c7",    # Light0 prominent text
-    "border": "#504945",       # Dark2 border
-    "border_focus": "#83a598", # Bright blue border
-    "key_bg": "#1d2021",       # Hard dark background for key badges
-    "key_fg": "#fabd2f",       # Bright yellow for key text
-    "accent_blue": "#83a598",  # Window / Layout accent
-    "accent_green": "#b8bb26", # Screenshots / Success
-    "accent_purple": "#d3869b",# Launchers / Prompts
-    "accent_red": "#fb4934",   # Danger / Exit / Kill
-    "accent_aqua": "#8ec07c",  # Workspaces / Navigation
-    "accent_yellow": "#fabd2f",# Scratchpads / Highlights
-}
+try:
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from theme import get_theme
+    THEME = get_theme()
+except Exception:
+    THEME = {
+        "bg": "#282828", "bg_surface": "#32302f", "bg_card": "#3c3836",
+        "bg_hover": "#504945", "bg_active": "#665c54", "border": "#504945",
+        "border_focus": "#83a598", "fg": "#ebdbb2", "fg_dim": "#a89984",
+        "fg_header": "#fbf1c7", "key_bg": "#1d2021", "key_fg": "#fabd2f",
+        "status_running": "#b8bb26", "status_stopped": "#fb4934",
+        "accent_blue": "#83a598", "accent_aqua": "#8ec07c",
+        "accent_green": "#b8bb26", "accent_yellow": "#fabd2f",
+        "accent_purple": "#d3869b", "accent_red": "#fb4934",
+    }
 
 # ==============================================================================
 # Qtile Keybindings Dataset
@@ -59,10 +55,14 @@ KEYBINDINGS_DATA = [
             ("Super + e", "Toggle Columns layout split H/V or switch to Columns", "Layout"),
             ("Super + f", "Toggle FZF Fast File Search dropdown (fzf-pad)", "Scratchpad"),
             ("Super + g", "Toggle Antigravity Autonomous Assistant (agy-pad)", "Scratchpad"),
+            ("Super + i", "Toggle Wi-Fi Network Selector dropdown (wifi-pad)", "Scratchpad"),
             ("Super + m", "Toggle Emoji Picker dropdown with clipboard copy (emoji-pad)", "Scratchpad"),
+            ("Super + n", "Toggle System Log Viewer & Searcher (log-pad)", "Scratchpad"),
             ("Super + r", "Toggle Ranger File Manager dropdown (ranger-pad)", "Scratchpad"),
+            ("Super + s", "Toggle Quick Notes in Vim (notes-pad / ~/notes/)", "Scratchpad"),
             ("Super + t", "Toggle btop System & Process Monitor (btop)", "Scratchpad"),
             ("Super + v", "Toggle Vim Reference Cheatsheet dropdown (vim-cheat)", "Scratchpad"),
+            ("Super + w", "Toggle Denver Weather Forecast dropdown (weather-pad)", "Scratchpad"),
             ("Super + x", "Toggle Clipboard History Manager (clip-pad)", "Scratchpad"),
             ("Super + z", "Toggle Zodiac Google Calendar & Agenda (zodiac-pad)", "Scratchpad"),
             ("Super + F1", "Toggle this Qtile Keybindings Cheatsheet (key-cheat)", "Scratchpad"),
@@ -135,6 +135,7 @@ KEYBINDINGS_DATA = [
         "icon": "\uf013",  # fa-cogs
         "color": THEME["accent_red"],
         "items": [
+            ("Super + o", "Toggle Gruvbox Dark / Light desktop theme opposite", "Theme"),
             ("Super + Ctrl + r", "Hot-reload Qtile configuration in-place without closing apps", "Reload"),
             ("Super + Ctrl + q", "Gracefully shut down and exit Qtile window manager", "Exit"),
             ("Ctrl + Alt + Delete", "Alternate shortcut to exit Qtile session", "Exit"),

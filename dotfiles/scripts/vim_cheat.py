@@ -19,27 +19,24 @@ import tkinter as tk
 from tkinter import font as tkfont
 
 # ==============================================================================
-# Theme: Gruvbox Dark (matching Qtile & Ghostty config)
+# Theme: Central Gruvbox (Dark / Light via Super + o)
 # ==============================================================================
-THEME = {
-    "bg": "#282828",           # Dark0 background
-    "bg_surface": "#32302f",   # Dark0_soft surface
-    "bg_card": "#3c3836",      # Dark1 container
-    "bg_hover": "#504945",     # Dark2 hover
-    "bg_active": "#665c54",    # Dark3 active selection
-    "fg": "#ebdbb2",           # Light1 main text
-    "fg_dim": "#a89984",       # Light4 muted text
-    "fg_header": "#fbf1c7",    # Light0 prominent text
-    "border": "#504945",       # Dark2 border
-    "border_focus": "#83a598", # Bright blue border
-    "key_bg": "#1d2021",       # Hard dark background for key badges
-    "key_fg": "#fabd2f",       # Bright yellow for key text
-    "accent_blue": "#83a598",  # Category title accent
-    "accent_green": "#b8bb26", # Normal mode / positive
-    "accent_purple": "#d3869b",# Visual mode / special
-    "accent_red": "#fb4934",   # Command / delete
-    "accent_aqua": "#8ec07c",  # Navigation / jumps
-}
+try:
+    import os
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from theme import get_theme
+    THEME = get_theme()
+except Exception:
+    THEME = {
+        "bg": "#282828", "bg_surface": "#32302f", "bg_card": "#3c3836",
+        "bg_hover": "#504945", "bg_active": "#665c54", "border": "#504945",
+        "border_focus": "#83a598", "fg": "#ebdbb2", "fg_dim": "#a89984",
+        "fg_header": "#fbf1c7", "key_bg": "#1d2021", "key_fg": "#fabd2f",
+        "status_running": "#b8bb26", "status_stopped": "#fb4934",
+        "accent_blue": "#83a598", "accent_aqua": "#8ec07c",
+        "accent_green": "#b8bb26", "accent_yellow": "#fabd2f",
+        "accent_purple": "#d3869b", "accent_red": "#fb4934",
+    }
 
 # ==============================================================================
 # Vim Cheatsheet Dataset

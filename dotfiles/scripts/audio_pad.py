@@ -29,28 +29,22 @@ import tkinter as tk
 from tkinter import ttk, font as tkfont
 
 # ==============================================================================
-# Theme: Gruvbox Dark (matching Qtile & Kitty config)
+# Theme: Central Gruvbox (Dark / Light via Super + o)
 # ==============================================================================
-THEME = {
-    "bg": "#282828",           # Dark0 background
-    "bg_surface": "#32302f",   # Dark0_soft surface
-    "bg_card": "#3c3836",      # Dark1 container
-    "bg_hover": "#504945",     # Dark2 hover
-    "bg_selected": "#504945",  # Dark2 selected
-    "border": "#504945",       # Dark2 border
-    "border_focus": "#83a598", # Bright blue border
-    "fg": "#ebdbb2",           # Light1 main text
-    "fg_dim": "#a89984",       # Light4 muted text
-    "fg_header": "#fbf1c7",    # Light0 prominent text
-    "key_bg": "#1d2021",       # Hard dark background for key badges
-    "key_fg": "#fabd2f",       # Bright yellow for key text
-    "status_running": "#b8bb26", # Bright green
-    "status_stopped": "#fb4934", # Bright red
-    "status_paused": "#fabd2f",  # Bright yellow
-    "accent_blue": "#83a598",  # Information accent
-    "accent_aqua": "#8ec07c",  # Secondary accent
-    "accent_purple": "#d3869b",# Special accent
-}
+try:
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from theme import get_theme
+    THEME = get_theme()
+except Exception:
+    THEME = {
+        "bg": "#282828", "bg_surface": "#32302f", "bg_card": "#3c3836",
+        "bg_hover": "#504945", "bg_selected": "#504945", "border": "#504945",
+        "border_focus": "#83a598", "fg": "#ebdbb2", "fg_dim": "#a89984",
+        "fg_header": "#fbf1c7", "key_bg": "#1d2021", "key_fg": "#fabd2f",
+        "status_running": "#b8bb26", "status_stopped": "#fb4934",
+        "status_paused": "#fabd2f", "accent_blue": "#83a598",
+        "accent_aqua": "#8ec07c", "accent_purple": "#d3869b",
+    }
 
 
 class PipeWireManager:
@@ -159,6 +153,7 @@ class AudioPadApp:
         self.streams = []
 
         self._updating_slider = False
+        self._vol_debounce_timers = {}
 
         self._build_header()
         self._build_content_area()
@@ -167,6 +162,21 @@ class AudioPadApp:
 
         self.refresh_audio()
         self.root.after(2000, self._auto_refresh)
+
+    def _debounced_set_volume(self, target, vol_percent: int, delay_ms: int = 40):
+        """Throttle volume adjustments during rapid slider drag events."""
+        if target in self._vol_debounce_timers:
+            try:
+                self.root.after_cancel(self._vol_debounce_timers[target])
+            except Exception:
+                pass
+
+        def _apply():
+            PipeWireManager.set_volume(target, vol_percent)
+            self._updating_slider = False
+            self._vol_debounce_timers.pop(target, None)
+
+        self._vol_debounce_timers[target] = self.root.after(delay_ms, _apply)
 
     def _build_header(self):
         header_bar = tk.Frame(
@@ -378,8 +388,7 @@ class AudioPadApp:
             self._updating_slider = True
             v = int(float(val))
             lbl_val.config(text=f"{v}%")
-            PipeWireManager.set_volume("@DEFAULT_AUDIO_SINK@", v)
-            self._updating_slider = False
+            self._debounced_set_volume("@DEFAULT_AUDIO_SINK@", v)
 
         scale.config(command=on_scale)
         scale.pack(side="left", fill="x", expand=True, padx=(0, 14))
@@ -448,8 +457,7 @@ class AudioPadApp:
             self._updating_slider = True
             v = int(float(val))
             lbl_val.config(text=f"{v}%")
-            PipeWireManager.set_volume("@DEFAULT_AUDIO_SOURCE@", v)
-            self._updating_slider = False
+            self._debounced_set_volume("@DEFAULT_AUDIO_SOURCE@", v)
 
         scale.config(command=on_scale)
         scale.pack(side="left", fill="x", expand=True, padx=(0, 14))
@@ -530,8 +538,7 @@ class AudioPadApp:
                     self._updating_slider = True
                     v = int(float(val))
                     target_lbl.config(text=f"{v}%")
-                    PipeWireManager.set_volume(target_id, v)
-                    self._updating_slider = False
+                    self._debounced_set_volume(target_id, v)
                 return _cmd
 
             scale.config(command=make_scale_cmd(nid, lbl_st_val))

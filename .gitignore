@@ -1,0 +1,15 @@
+# Python bytecode and cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Runtime theme state
+theme_state.json
+
+# Editor backups and swap files
+*~
+*.swp
+*.swo
+
+# OS metadata
+.DS_Store

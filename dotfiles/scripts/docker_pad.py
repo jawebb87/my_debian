@@ -26,49 +26,53 @@ import tkinter as tk
 from tkinter import font as tkfont
 
 # ==============================================================================
-# Theme: Gruvbox Dark (matching Qtile & Kitty config)
+# Theme: Central Gruvbox (Dark / Light via Super + o)
 # ==============================================================================
-THEME = {
-    "bg": "#282828",           # Dark0 background
-    "bg_surface": "#32302f",   # Dark0_soft surface
-    "bg_card": "#3c3836",      # Dark1 container
-    "bg_hover": "#504945",     # Dark2 hover
-    "bg_selected": "#3c3836",  # Dark1 selected
-    "border": "#504945",       # Dark2 border
-    "border_focus": "#83a598", # Bright blue border
-    "fg": "#ebdbb2",           # Light1 main text
-    "fg_dim": "#a89984",       # Light4 muted text
-    "fg_header": "#fbf1c7",    # Light0 prominent text
-    "key_bg": "#1d2021",       # Hard dark background for key badges
-    "key_fg": "#fabd2f",       # Bright yellow for key text
-    "status_running": "#b8bb26", # Bright green
-    "status_stopped": "#fb4934", # Bright red
-    "status_paused": "#fabd2f",  # Bright yellow
-    "accent_blue": "#83a598",  # Information accent
-    "accent_aqua": "#8ec07c",  # Port / network accent
-    "accent_purple": "#d3869b",# Special / ID accent
-}
+try:
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from theme import get_theme
+    THEME = get_theme()
+except Exception:
+    THEME = {
+        "bg": "#282828", "bg_surface": "#32302f", "bg_card": "#3c3836",
+        "bg_hover": "#504945", "bg_selected": "#3c3836", "border": "#504945",
+        "border_focus": "#83a598", "fg": "#ebdbb2", "fg_dim": "#a89984",
+        "fg_header": "#fbf1c7", "key_bg": "#1d2021", "key_fg": "#fabd2f",
+        "status_running": "#b8bb26", "status_stopped": "#fb4934",
+        "status_paused": "#fabd2f", "accent_blue": "#83a598",
+        "accent_aqua": "#8ec07c", "accent_purple": "#d3869b",
+    }
 
 
-def run_docker(cmd_args: list[str]) -> subprocess.CompletedProcess:
+def run_docker(cmd_args: list[str], timeout: int = 15) -> subprocess.CompletedProcess:
     """Execute a docker CLI command, wrapping with sg docker if needed."""
     sock_path = "/var/run/docker.sock"
     needs_sg = os.path.exists(sock_path) and not os.access(sock_path, os.R_OK | os.W_OK)
 
-    if needs_sg:
-        cmd_str = "docker " + " ".join(shlex.quote(arg) for arg in cmd_args)
-        return subprocess.run(
-            ["sg", "docker", "-c", cmd_str],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-    else:
-        return subprocess.run(
-            ["docker"] + cmd_args,
-            capture_output=True,
-            text=True,
-            check=False,
+    try:
+        if needs_sg:
+            cmd_str = "docker " + " ".join(shlex.quote(arg) for arg in cmd_args)
+            return subprocess.run(
+                ["sg", "docker", "-c", cmd_str],
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=timeout,
+            )
+        else:
+            return subprocess.run(
+                ["docker"] + cmd_args,
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=timeout,
+            )
+    except subprocess.TimeoutExpired:
+        return subprocess.CompletedProcess(
+            args=["docker"] + cmd_args,
+            returncode=124,
+            stdout="",
+            stderr=f"Error: Docker command timed out after {timeout}s",
         )
 
 

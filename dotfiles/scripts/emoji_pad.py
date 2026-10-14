@@ -31,27 +31,21 @@ import tkinter as tk
 from tkinter import font as tkfont
 
 # ==============================================================================
-# Theme: Gruvbox Dark (matching Qtile & Kitty/Ghostty config)
+# Theme: Central Gruvbox (Dark / Light via Super + o)
 # ==============================================================================
-THEME = {
-    "bg": "#282828",           # Dark0 background
-    "bg_surface": "#32302f",   # Dark0_soft surface
-    "bg_card": "#3c3836",      # Dark1 container
-    "bg_hover": "#504945",     # Dark2 hover
-    "bg_selected": "#504945",  # Dark2 selected
-    "border": "#504945",       # Dark2 border
-    "border_focus": "#83a598", # Bright blue border
-    "fg": "#ebdbb2",           # Light1 main text
-    "fg_dim": "#a89984",       # Light4 muted text
-    "fg_header": "#fbf1c7",    # Light0 prominent text
-    "key_bg": "#1d2021",       # Hard dark background for key badges
-    "key_fg": "#fabd2f",       # Bright yellow for key text
-    "status_running": "#b8bb26", # Bright green
-    "status_stopped": "#fb4934", # Bright red
-    "accent_blue": "#83a598",  # Information accent
-    "accent_aqua": "#8ec07c",  # Code accent
-    "accent_purple": "#d3869b",# Special accent
-}
+try:
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from theme import get_theme
+    THEME = get_theme()
+except Exception:
+    THEME = {
+        "bg": "#282828", "bg_surface": "#32302f", "bg_card": "#3c3836",
+        "bg_hover": "#504945", "bg_selected": "#504945", "border": "#504945",
+        "border_focus": "#83a598", "fg": "#ebdbb2", "fg_dim": "#a89984",
+        "fg_header": "#fbf1c7", "key_bg": "#1d2021", "key_fg": "#fabd2f",
+        "status_running": "#b8bb26", "status_stopped": "#fb4934",
+        "accent_blue": "#83a598", "accent_aqua": "#8ec07c", "accent_purple": "#d3869b",
+    }
 
 CACHE_DIR = os.path.expanduser("~/.cache/emoji_pad")
 RECENT_FILE = os.path.join(CACHE_DIR, "recent.json")

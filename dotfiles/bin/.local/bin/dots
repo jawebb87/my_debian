@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# dots: Global CLI wrapper for my_debian dotfiles & GNU Stow manager
+# ==============================================================================
+exec /home/jaws/Projects/my_debian/manage.sh "$@"

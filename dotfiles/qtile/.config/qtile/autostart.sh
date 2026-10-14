@@ -28,3 +28,7 @@ for agent in \
         break
     fi
 done
+
+# 4. Start XDG Desktop Portals (Firefox & GTK dark/light appearance integration)
+systemctl --user start xdg-desktop-portal xdg-desktop-portal-gtk 2>/dev/null || true
+

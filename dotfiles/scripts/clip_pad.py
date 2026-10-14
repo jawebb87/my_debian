@@ -25,28 +25,22 @@ import tkinter as tk
 from tkinter import font as tkfont
 
 # ==============================================================================
-# Theme: Gruvbox Dark (matching Qtile & Kitty config)
+# Theme: Central Gruvbox (Dark / Light via Super + o)
 # ==============================================================================
-THEME = {
-    "bg": "#282828",           # Dark0 background
-    "bg_surface": "#32302f",   # Dark0_soft surface
-    "bg_card": "#3c3836",      # Dark1 container
-    "bg_hover": "#504945",     # Dark2 hover
-    "bg_selected": "#3c3836",  # Dark1 selected
-    "border": "#504945",       # Dark2 border
-    "border_focus": "#83a598", # Bright blue border
-    "fg": "#ebdbb2",           # Light1 main text
-    "fg_dim": "#a89984",       # Light4 muted text
-    "fg_header": "#fbf1c7",    # Light0 prominent text
-    "key_bg": "#1d2021",       # Hard dark background for key badges
-    "key_fg": "#fabd2f",       # Bright yellow for key text
-    "status_running": "#b8bb26", # Bright green
-    "status_stopped": "#fb4934", # Bright red
-    "status_paused": "#fabd2f",  # Bright yellow
-    "accent_blue": "#83a598",  # Information accent
-    "accent_aqua": "#8ec07c",  # URL / network accent
-    "accent_purple": "#d3869b",# Special / type accent
-}
+try:
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from theme import get_theme
+    THEME = get_theme()
+except Exception:
+    THEME = {
+        "bg": "#282828", "bg_surface": "#32302f", "bg_card": "#3c3836",
+        "bg_hover": "#504945", "bg_selected": "#3c3836", "border": "#504945",
+        "border_focus": "#83a598", "fg": "#ebdbb2", "fg_dim": "#a89984",
+        "fg_header": "#fbf1c7", "key_bg": "#1d2021", "key_fg": "#fabd2f",
+        "status_running": "#b8bb26", "status_stopped": "#fb4934",
+        "status_paused": "#fabd2f", "accent_blue": "#83a598",
+        "accent_aqua": "#8ec07c", "accent_purple": "#d3869b",
+    }
 
 CACHE_DIR = os.path.expanduser("~/.cache/clip_pad")
 HISTORY_FILE = os.path.join(CACHE_DIR, "history.json")
@@ -261,6 +255,7 @@ class ClipPadApp:
 
         # Start background polling thread
         self.polling_active = True
+        self.root.protocol("WM_DELETE_WINDOW", self._on_close)
         self.poll_thread = threading.Thread(target=self._clipboard_poller, daemon=True)
         self.poll_thread.start()
 
@@ -506,16 +501,17 @@ class ClipPadApp:
                 current = get_current_xclip()
                 if current and current != self.last_clipboard:
                     self.last_clipboard = current
-                    added = self._add_to_history(current, save=True)
-                    if added:
-                        self.root.after(0, self._on_external_clip_added)
+                    self.root.after(0, lambda c=current: self._on_external_clip(c))
             except Exception:
                 pass
             time.sleep(0.8)
 
-    def _on_external_clip_added(self):
-        self._filter_clips()
-        self.show_toast("✓ New clip captured")
+    def _on_external_clip(self, clip_text: str):
+        if not self.polling_active:
+            return
+        if self._add_to_history(clip_text, save=True):
+            self._filter_clips()
+            self.show_toast("✓ New clip captured")
 
     # ==========================================================================
     # Rendering & Filtering
@@ -634,18 +630,20 @@ class ClipPadApp:
             fraction = new_idx / max(1, len(self.cards) - 1)
             self.canvas.yview_moveto(max(0.0, fraction - 0.2))
 
+    def _on_close(self):
+        self.polling_active = False
+        self.root.destroy()
+
     def _on_escape(self, event):
         if self.root.focus_get() == self.search_entry and self.search_var.get():
             self.search_var.set("")
             self.root.focus_set()
         else:
-            self.polling_active = False
-            self.root.destroy()
+            self._on_close()
 
     def _on_q(self, event):
         if self.root.focus_get() != self.search_entry:
-            self.polling_active = False
-            self.root.destroy()
+            self._on_close()
 
     def _on_slash(self, event):
         if self.root.focus_get() != self.search_entry:

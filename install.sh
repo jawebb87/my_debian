@@ -33,10 +33,10 @@ copy_dotfiles() {
     done
 
     # Ensure scratchpad scripts are in Projects/qtile_bench
-    for script in vim_cheat.py docker_pad.py clip_pad.py; do
-        if [ -f "$DOTFILES_DIR/scripts/$script" ]; then
-            cp -a "$DOTFILES_DIR/scripts/$script" "$HOME/Projects/qtile_bench/"
-            chmod +x "$HOME/Projects/qtile_bench/$script"
+    for script in "$DOTFILES_DIR/scripts"/*; do
+        if [ -f "$script" ]; then
+            cp -a "$script" "$HOME/Projects/qtile_bench/"
+            chmod +x "$HOME/Projects/qtile_bench/$(basename "$script")"
         fi
     done
 
@@ -46,30 +46,7 @@ copy_dotfiles() {
 }
 
 stow_dotfiles() {
-    if ! command -v stow &>/dev/null; then
-        echo "GNU Stow is not installed. Installing stow..."
-        sudo apt update && sudo apt install -y stow
-    fi
-
-    echo "==> Symlinking dotfiles via GNU Stow..."
-    mkdir -p "$HOME/.config" "$HOME/.local/bin" "$HOME/Projects/qtile_bench"
-
-    for dir in "$DOTFILES_DIR"/*; do
-        if [ -d "$dir" ] && [ "$(basename "$dir")" != "scripts" ]; then
-            pkg=$(basename "$dir")
-            echo "    -> Stowing $pkg..."
-            stow -d "$DOTFILES_DIR" -t "$HOME" "$pkg"
-        fi
-    done
-
-    for script in vim_cheat.py docker_pad.py clip_pad.py; do
-        if [ -f "$DOTFILES_DIR/scripts/$script" ]; then
-            ln -sf "$DOTFILES_DIR/scripts/$script" "$HOME/Projects/qtile_bench/$script"
-            chmod +x "$DOTFILES_DIR/scripts/$script"
-        fi
-    done
-
-    echo "✓ Dotfiles symlinked successfully via Stow!"
+    "$REPO_DIR/manage.sh" stow
 }
 
 install_packages() {

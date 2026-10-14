@@ -128,3 +128,4 @@ lp_theme powerline
 # Added by Antigravity CLI installer
 export PATH="/home/jaws/.local/bin:$PATH"
 [[ ${BLE_VERSION-} ]] && ble-attach
+. "$HOME/.cargo/env"

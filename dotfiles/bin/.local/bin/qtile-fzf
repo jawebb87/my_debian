@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# qtile-fzf: Interactive File Finder for Qtile Dropdown
+# ==============================================================================
+
+set -e
+
+# Search starting from $HOME, ignoring common heavy cache/build/trash folders
+SEARCH_ROOT="${1:-$HOME}"
+
+SELECTED=$(find "$SEARCH_ROOT" \
+    -maxdepth 6 \
+    -not -path '*/.git*' \
+    -not -path '*/.cache*' \
+    -not -path '*/.local/share/Trash*' \
+    -not -path '*/node_modules*' \
+    -not -path '*/__pycache__*' \
+    2>/dev/null | fzf \
+    --prompt="🔍 Search Files > " \
+    --header="[Enter] Open  |  [Ctrl-v] Vim  |  [Ctrl-y] Copy Path  |  [Esc] Quit" \
+    --preview="batcat --color=always --line-range :100 {} 2>/dev/null || cat {} 2>/dev/null | head -n 100" \
+    --preview-window="right:60%:wrap" \
+    --bind="ctrl-y:execute-silent(echo -n {} | xclip -selection clipboard)+abort" \
+    --bind="ctrl-v:execute(vim {})" \
+    --reverse \
+    --color="bg+:#3c3836,bg:#282828,spinner:#fabd2f,hl:#83a598" \
+    --color="fg:#ebdbb2,header:#fabd2f,info:#8ec07c,pointer:#fabd2f" \
+    --color="marker:#b8bb26,fg+:#fbf1c7,prompt:#83a598,hl+:#fabd2f")
+
+if [ -n "$SELECTED" ]; then
+    if [ -d "$SELECTED" ]; then
+        if command -v ranger &>/dev/null; then
+            exec ranger "$SELECTED"
+        else
+            cd "$SELECTED" && exec bash
+        fi
+    elif file -b --mime "$SELECTED" | grep -qE "text/|json|javascript|x-shellscript|x-empty"; then
+        exec vim "$SELECTED"
+    else
+        xdg-open "$SELECTED" >/dev/null 2>&1 &
+        disown
+    fi
+fi

@@ -29,6 +29,7 @@ btop
 curl
 dmidecode
 eza
+fzf
 git
 inetutils-telnet
 kitty
@@ -38,6 +39,7 @@ micro
 netcat-traditional
 pciutils
 ripgrep
+stow
 traceroute
 usbutils
 w3m

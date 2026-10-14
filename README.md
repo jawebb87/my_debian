@@ -30,17 +30,53 @@ Configs are organized into modular, GNU Stow-compatible component directories un
 ```
 dotfiles/
 ├── bash/               # .bashrc, .bash_aliases, .inputrc (prefix search)
-├── qtile/              # .config/qtile/ (config.py, autostart.sh)
-├── kitty/              # .config/kitty/ (kitty.conf)
-├── picom/              # .config/picom/ (picom.conf)
+├── bin/                # .local/bin/ (dots, qtile-fzf, qtile-notes, apply-power-limits.sh, play, termplay, etc.)
+├── btop/               # .config/btop/ (btop.conf)
 ├── dunst/              # .config/dunst/ (dunstrc)
-├── rofi/               # .config/rofi/ (config.rasi)
+├── gtk/                # .config/gtk-3.0/, .config/gtk-4.0/ (settings.ini)
+├── kitty/              # .config/kitty/ (kitty.conf, gruvbox-dark.conf, gruvbox-light.conf)
 ├── micro/              # .config/micro/ (bindings.json)
-├── gtk/                # .config/gtk-3.0/, .config/gtk-4.0/
+├── mpv/                # .config/mpv/ (mpv.conf with kitty vo & yt-dlp)
+├── picom/              # .config/picom/ (picom.conf)
 ├── power/              # .config/ (power-limits.service, power-limits-sleep.sh)
-├── bin/                # .local/bin/ (qtile-screenshot, apply-power-limits.sh, termplay)
-└── scripts/            # Custom utility scripts (vim_cheat.py, docker_pad.py, clip_pad.py)
+├── qtile/              # .config/qtile/ (config.py, autostart.sh, theme.py)
+├── rofi/               # .config/rofi/ (config.rasi)
+├── scripts/            # Qtile bench dropdowns (linked to ~/Projects/qtile_bench/)
+└── yt-dlp/             # .config/yt-dlp/ (config)
 ```
+
+---
+
+## Automated Dotfiles Management (`dots` CLI)
+
+All dotfiles in `$HOME` and utility scripts in `~/Projects/qtile_bench` are managed via GNU Stow symlinks pointing directly into this repository. A global CLI utility `dots` (or `./manage.sh`) is provided for seamless sync and git workflows:
+
+```bash
+# Check symlink health and pending git changes
+dots status
+
+# View diff of any modified configuration files
+dots diff
+
+# Commit and push changes directly to GitHub
+dots push "feat(qtile): add new keybindings"
+
+# Restow or repair any symlinks (with automatic pre-stow backups)
+dots stow
+
+# Pull latest changes from git and restow
+dots pull
+
+# Adopt an existing configuration file into stow
+dots add ~/.config/app/config [package_name]
+```
+
+### Convenient Shell Aliases:
+- `dots` -> runs `dots status`
+- `dotstatus` -> quick symlink and git status
+- `dotdiff` -> colored git diff of dotfile modifications
+- `dotpush` -> stage, commit, and push changes
+- `dotstow` -> restow all packages
 
 ---
 
@@ -53,28 +89,12 @@ chmod +x install.sh
 ./install.sh
 ```
 
-### Manual Installation Commands:
+### Installation Options:
 
-1. **Restore all dotfiles via `cp`**:
-   ```bash
-   for dir in dotfiles/*; do
-     [ -d "$dir" ] && [ "$(basename "$dir")" != "scripts" ] && cp -a "$dir"/. "$HOME"/
-   done
-   cp -a dotfiles/scripts/{vim_cheat.py,docker_pad.py,clip_pad.py} "$HOME/Projects/qtile_bench/"
-   ```
-
-2. **Or Symlink via GNU Stow**:
-   ```bash
-   sudo apt install stow
-   for dir in dotfiles/*; do
-     [ -d "$dir" ] && [ "$(basename "$dir")" != "scripts" ] && stow -d dotfiles -t ~ "$(basename "$dir")"
-   done
-   ```
-
-3. **Restore manually installed packages**:
-   ```bash
-   sudo apt update && grep -vE '^\s*(#|$)' installed_packages.txt | sudo xargs apt install -y
-   ```
+1. **Option 1: Standard Copy (`cp`)**: Copies files directly to `$HOME` and `~/Projects/qtile_bench/`.
+2. **Option 2: Symlink via GNU Stow (`dots stow`)**: Installs GNU Stow if needed, backs up any conflicting regular files to `~/.dotfiles_backup/`, and creates live symlinks.
+3. **Option 3: Restore APT packages**: Installs all software listed in `installed_packages.txt`.
+4. **Option 4: Everything**: Full package install + automated dotfile stow.
 
 ---
 

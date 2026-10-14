@@ -20,3 +20,11 @@ for policy in /sys/devices/system/cpu/cpufreq/policy*; do
     fi
 done
 echo "[OK] CPU frequency capped to: $(cat /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq) kHz (1.7 GHz)"
+
+modprobe cpufreq_powersave 2>/dev/null || true
+for policy in /sys/devices/system/cpu/cpufreq/policy*; do
+  if grep -q "powersave" "$policy/scaling_available_governors" 2>/dev/null; then
+    echo powersave > "$policy/scaling_governor"
+  fi
+done
+
