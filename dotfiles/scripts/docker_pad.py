@@ -249,10 +249,9 @@ class DockerPadApp:
         # Set initial dimensions to match Qtile DropDown proportions
         sw = self.root.winfo_screenwidth()
         sh = self.root.winfo_screenheight()
-        target_w = int(sw * 0.8)
+        target_w = min(1500, int(sw * 0.8))
         target_h = int(sh * 0.88)
         self.root.geometry(f"{target_w}x{target_h}")
-        self.root.minsize(target_w, target_h)
 
         self.containers = []
         self.cards = []
@@ -503,7 +502,8 @@ class DockerPadApp:
 
                 self.root.after(0, lambda: self._on_containers_fetched(containers))
             except Exception as e:
-                self.root.after(0, lambda: self.show_toast(f"Error: {e}", THEME["status_stopped"]))
+                err_msg = str(e)
+                self.root.after(0, lambda msg=err_msg: self.show_toast(f"Error: {msg}", THEME["status_stopped"]))
             finally:
                 self.is_loading = False
 

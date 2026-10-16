@@ -1,2 +1,10 @@
 # yt-dlp default configuration
---extractor-args "youtube:player_client=android"
+
+# Extract session cookies from Firefox to bypass age gates and login requirements
+--cookies-from-browser firefox
+
+# Use installed Node.js runtime to execute YouTube's player signature / n-challenge scripts
+--js-runtimes node
+
+# Allow web client for authenticated/age-restricted downloads with cookies
+--extractor-args "youtube:player_client=default,web"

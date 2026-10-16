@@ -1,0 +1,553 @@
+#!/usr/bin/env python3
+"""
+sorted - Automatic Downloads Organizer
+======================================
+Organizes files in ~/Downloads by moving them to standard user directories
+(~/Documents, ~/Pictures, ~/Music, ~/Movies) or categorizing them into dedicated
+subfolders inside ~/Downloads (Archives, Software, Code, Torrents, Fonts, Other).
+
+Features:
+- Safe collision handling (appends (1), (2), etc. without overwriting)
+- Ignores incomplete downloads (.crdownload, .part, .tmp, etc.) and hidden files
+- Ignores already organized subdirectories within ~/Downloads
+- Dry-run mode (--dry-run / -n)
+- One-shot execution (--once, default) or continuous watch mode (--watch / -w)
+- Zero external dependencies (uses standard library: pathlib, shutil, argparse, logging)
+"""
+
+from __future__ import annotations
+
+import argparse
+import logging
+import os
+import shutil
+import signal
+import sys
+import time
+from pathlib import Path
+from typing import Dict, List, Optional, Set, Tuple
+
+# Logger setup
+logger = logging.getLogger("sorted")
+
+# Multi-part compound extensions to check before single suffixes
+COMPOUND_EXTENSIONS: Tuple[str, ...] = (
+    ".tar.gz",
+    ".tar.bz2",
+    ".tar.xz",
+    ".tar.zst",
+    ".tbz2",
+    ".tgz",
+    ".txz",
+)
+
+# Standard home directories (relative to ~)
+HOME_CATEGORIES: Dict[str, str] = {
+    "Documents": "Documents",
+    "Pictures": "Pictures",
+    "Music": "Music",
+    "Movies": "Movies",
+}
+
+# Fallback categories inside ~/Downloads
+DOWNLOADS_CATEGORIES: Dict[str, str] = {
+    "Archives": "Archives",
+    "Software": "Software",
+    "Code": "Code",
+    "Torrents": "Torrents",
+    "Fonts": "Fonts",
+    "Other": "Other",
+}
+
+# Extensions mapped to standard Home directories
+HOME_EXTENSION_MAP: Dict[str, str] = {
+    # Documents
+    ".pdf": "Documents",
+    ".doc": "Documents",
+    ".docx": "Documents",
+    ".odt": "Documents",
+    ".txt": "Documents",
+    ".rtf": "Documents",
+    ".epub": "Documents",
+    ".mobi": "Documents",
+    ".csv": "Documents",
+    ".tsv": "Documents",
+    ".xlsx": "Documents",
+    ".xls": "Documents",
+    ".ods": "Documents",
+    ".pptx": "Documents",
+    ".ppt": "Documents",
+    ".odp": "Documents",
+    ".tex": "Documents",
+    ".md": "Documents",
+    ".pages": "Documents",
+    ".key": "Documents",
+    ".numbers": "Documents",
+    # Pictures
+    ".jpg": "Pictures",
+    ".jpeg": "Pictures",
+    ".png": "Pictures",
+    ".gif": "Pictures",
+    ".bmp": "Pictures",
+    ".webp": "Pictures",
+    ".svg": "Pictures",
+    ".tiff": "Pictures",
+    ".tif": "Pictures",
+    ".ico": "Pictures",
+    ".psd": "Pictures",
+    ".raw": "Pictures",
+    ".heic": "Pictures",
+    ".avif": "Pictures",
+    ".xcf": "Pictures",
+    ".ai": "Pictures",
+    ".eps": "Pictures",
+    # Music
+    ".mp3": "Music",
+    ".flac": "Music",
+    ".wav": "Music",
+    ".m4a": "Music",
+    ".aac": "Music",
+    ".ogg": "Music",
+    ".oga": "Music",
+    ".opus": "Music",
+    ".wma": "Music",
+    ".alac": "Music",
+    ".aiff": "Music",
+    ".mid": "Music",
+    ".midi": "Music",
+    # Movies / Videos
+    ".mp4": "Movies",
+    ".mkv": "Movies",
+    ".avi": "Movies",
+    ".mov": "Movies",
+    ".wmv": "Movies",
+    ".flv": "Movies",
+    ".webm": "Movies",
+    ".m4v": "Movies",
+    ".mpg": "Movies",
+    ".mpeg": "Movies",
+    ".3gp": "Movies",
+    ".ts": "Movies",
+    ".vob": "Movies",
+}
+
+# Extensions mapped to subdirectories inside ~/Downloads
+DOWNLOADS_EXTENSION_MAP: Dict[str, str] = {
+    # Archives
+    ".tar.gz": "Archives",
+    ".tar.bz2": "Archives",
+    ".tar.xz": "Archives",
+    ".tar.zst": "Archives",
+    ".tgz": "Archives",
+    ".tbz2": "Archives",
+    ".txz": "Archives",
+    ".zip": "Archives",
+    ".tar": "Archives",
+    ".gz": "Archives",
+    ".bz2": "Archives",
+    ".xz": "Archives",
+    ".7z": "Archives",
+    ".rar": "Archives",
+    ".zst": "Archives",
+    ".lz": "Archives",
+    ".iso": "Archives",
+    ".img": "Archives",
+    # Software & Binaries
+    ".deb": "Software",
+    ".rpm": "Software",
+    ".appimage": "Software",
+    ".run": "Software",
+    ".bin": "Software",
+    ".pkg": "Software",
+    ".dmg": "Software",
+    ".exe": "Software",
+    ".msi": "Software",
+    ".apk": "Software",
+    ".flatpakref": "Software",
+    # Code & Configs
+    ".py": "Code",
+    ".sh": "Code",
+    ".bash": "Code",
+    ".zsh": "Code",
+    ".c": "Code",
+    ".cpp": "Code",
+    ".h": "Code",
+    ".hpp": "Code",
+    ".rs": "Code",
+    ".go": "Code",
+    ".java": "Code",
+    ".js": "Code",
+    ".ts": "Code",
+    ".html": "Code",
+    ".css": "Code",
+    ".json": "Code",
+    ".yaml": "Code",
+    ".yml": "Code",
+    ".toml": "Code",
+    ".xml": "Code",
+    ".sql": "Code",
+    ".diff": "Code",
+    ".patch": "Code",
+    # Torrents
+    ".torrent": "Torrents",
+    # Fonts
+    ".ttf": "Fonts",
+    ".otf": "Fonts",
+    ".woff": "Fonts",
+    ".woff2": "Fonts",
+}
+
+# Temporary or in-progress download extensions to strictly skip
+IGNORE_EXTENSIONS: Set[str] = {
+    ".crdownload",
+    ".part",
+    ".tmp",
+    ".download",
+    ".torrent.part",
+    ".aria2",
+    "!ut",
+}
+
+
+def split_filename_and_ext(filename: str) -> Tuple[str, str]:
+    """
+    Split a filename into (stem, ext), supporting multi-part compound extensions
+    such as '.tar.gz', '.tar.xz', etc.
+    """
+    lower = filename.lower()
+    for compound in COMPOUND_EXTENSIONS:
+        if lower.endswith(compound):
+            return filename[: -len(compound)], filename[-len(compound) :]
+    p = Path(filename)
+    return p.stem, p.suffix
+
+
+def get_file_extension(filename: str) -> str:
+    """Return the normalized lowercase extension (single or compound) of a filename."""
+    _, ext = split_filename_and_ext(filename)
+    return ext.lower()
+
+
+def is_ignored(path: Path) -> bool:
+    """
+    Check if a file should be ignored:
+    - Hidden files (starts with dot)
+    - Subdirectories
+    - In-progress / temporary download extensions
+    """
+    name = path.name
+    if name.startswith("."):
+        return True
+
+    # Check if ends with any temporary / partial download extension
+    lower = name.lower()
+    for ign in IGNORE_EXTENSIONS:
+        if lower.endswith(ign):
+            return True
+
+    return False
+
+
+def classify_file(path: Path) -> Tuple[str, bool]:
+    """
+    Determine the category for a file and whether it belongs in user HOME
+    or inside a subfolder of Downloads.
+
+    Returns:
+        (category_name, is_home_destination)
+        Example: ("Documents", True) or ("Archives", False)
+    """
+    ext = get_file_extension(path.name)
+
+    # 1. Check primary Home directories
+    if ext in HOME_EXTENSION_MAP:
+        return HOME_EXTENSION_MAP[ext], True
+
+    # 2. Check Downloads subfolders
+    if ext in DOWNLOADS_EXTENSION_MAP:
+        return DOWNLOADS_EXTENSION_MAP[ext], False
+
+    # 3. Fallback for files without a known home
+    return "Other", False
+
+
+def resolve_destination_dir(
+    category: str,
+    is_home: bool,
+    home_dir: Path,
+    downloads_dir: Path,
+) -> Path:
+    """Resolve the target directory path for a given category."""
+    if is_home:
+        dest = home_dir / HOME_CATEGORIES.get(category, category)
+    else:
+        dest = downloads_dir / DOWNLOADS_CATEGORIES.get(category, "Other")
+    return dest
+
+
+def get_collision_free_path(target_dir: Path, filename: str) -> Path:
+    """
+    Generate a collision-free target Path. If target_dir / filename exists,
+    appends (1), (2), ... before the extension (respecting compound extensions).
+    """
+    candidate = target_dir / filename
+    if not candidate.exists():
+        return candidate
+
+    stem, ext = split_filename_and_ext(filename)
+    counter = 1
+    while True:
+        candidate = target_dir / f"{stem}({counter}){ext}"
+        if not candidate.exists():
+            return candidate
+        counter += 1
+
+
+def sort_file(
+    path: Path,
+    home_dir: Path,
+    downloads_dir: Path,
+    dry_run: bool = False,
+) -> Optional[Path]:
+    """
+    Process and move a single file to its appropriate destination.
+
+    Returns:
+        The destination Path if moved (or would be moved in dry-run), None if skipped.
+    """
+    try:
+        # Check if path is a regular file and not a symlink/dir
+        if not path.is_file() or path.is_symlink():
+            return None
+
+        if is_ignored(path):
+            logger.debug("Skipping ignored file: %s", path.name)
+            return None
+
+        category, is_home = classify_file(path)
+        dest_dir = resolve_destination_dir(
+            category=category,
+            is_home=is_home,
+            home_dir=home_dir,
+            downloads_dir=downloads_dir,
+        )
+
+        dest_path = get_collision_free_path(dest_dir, path.name)
+
+        if dry_run:
+            logger.info("[DRY-RUN] Would move '%s' -> '%s'", path, dest_path)
+            return dest_path
+
+        # Ensure target directory exists
+        dest_dir.mkdir(parents=True, exist_ok=True)
+
+        # Move the file
+        shutil.move(str(path), str(dest_path))
+        logger.info("Moved '%s' -> '%s'", path.name, dest_path)
+        return dest_path
+
+    except (PermissionError, OSError) as e:
+        logger.error("Failed to move '%s': %s", path, e)
+        return None
+
+
+def run_once(
+    home_dir: Path,
+    downloads_dir: Path,
+    dry_run: bool = False,
+) -> int:
+    """
+    Perform a single pass over ~/Downloads, sorting all eligible files.
+    Returns the count of sorted files.
+    """
+    if not downloads_dir.exists() or not downloads_dir.is_dir():
+        logger.warning("Downloads directory does not exist: %s", downloads_dir)
+        return 0
+
+    logger.debug("Scanning '%s'...", downloads_dir)
+    sorted_count = 0
+
+    try:
+        # List entries in downloads_dir (non-recursive)
+        entries = sorted(downloads_dir.iterdir(), key=lambda p: p.name.lower())
+    except OSError as e:
+        logger.error("Error reading directory '%s': %s", downloads_dir, e)
+        return 0
+
+    for item in entries:
+        # We only sort top-level files in Downloads (do not touch subdirectories)
+        if item.is_file() and not item.is_symlink():
+            if sort_file(item, home_dir, downloads_dir, dry_run=dry_run):
+                sorted_count += 1
+
+    return sorted_count
+
+
+def run_watch(
+    home_dir: Path,
+    downloads_dir: Path,
+    interval: float = 3.0,
+    settle_time: float = 2.0,
+    dry_run: bool = False,
+) -> None:
+    """
+    Continuously monitor ~/Downloads for new files and sort them once
+    their size has stabilized (ensuring in-progress writes have concluded).
+    """
+    logger.info("Starting watch daemon on '%s' (interval: %.1fs)...", downloads_dir, interval)
+
+    stop_requested = False
+
+    def handle_signal(sig, frame):  # type: ignore
+        nonlocal stop_requested
+        logger.info("Received signal %s; shutting down cleanly...", sig)
+        stop_requested = True
+
+    signal.signal(signal.SIGINT, handle_signal)
+    signal.signal(signal.SIGTERM, handle_signal)
+
+    # Tracks {path: (last_size, last_mtime, first_seen_time)}
+    file_tracker: Dict[Path, Tuple[int, float, float]] = {}
+
+    while not stop_requested:
+        try:
+            if not downloads_dir.exists() or not downloads_dir.is_dir():
+                time.sleep(interval)
+                continue
+
+            current_files: Set[Path] = set()
+            now = time.time()
+
+            for item in downloads_dir.iterdir():
+                if not item.is_file() or item.is_symlink():
+                    continue
+                if is_ignored(item):
+                    continue
+
+                current_files.add(item)
+                try:
+                    stat = item.stat()
+                    current_size = stat.st_size
+                    current_mtime = stat.st_mtime
+                except OSError:
+                    continue
+
+                if item not in file_tracker:
+                    # First time seeing this file
+                    file_tracker[item] = (current_size, current_mtime, now)
+                else:
+                    prev_size, prev_mtime, first_seen = file_tracker[item]
+                    # Check if file has settled (size & mtime unchanged, and present for >= settle_time)
+                    if (
+                        current_size == prev_size
+                        and current_mtime == prev_mtime
+                        and (now - first_seen >= settle_time)
+                    ):
+                        sort_file(item, home_dir, downloads_dir, dry_run=dry_run)
+                        file_tracker.pop(item, None)
+                    else:
+                        file_tracker[item] = (current_size, current_mtime, first_seen)
+
+            # Purge tracker entries for files that were moved or deleted
+            untracked = [p for p in file_tracker if p not in current_files]
+            for p in untracked:
+                file_tracker.pop(p, None)
+
+        except Exception as e:
+            logger.error("Unexpected error in watch loop: %s", e)
+
+        # Sleep interval in small slices so signal response is instantaneous
+        sleep_elapsed = 0.0
+        step = 0.2
+        while sleep_elapsed < interval and not stop_requested:
+            time.sleep(min(step, interval - sleep_elapsed))
+            sleep_elapsed += step
+
+    logger.info("Watch daemon stopped.")
+
+
+def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog="sorted",
+        description="Organize ~/Downloads into Documents, Pictures, Music, Movies, or categorized subfolders.",
+    )
+    mode_group = parser.add_mutually_exclusive_group()
+    mode_group.add_argument(
+        "--once",
+        action="store_true",
+        default=True,
+        help="Run sorting once and exit immediately (default mode).",
+    )
+    mode_group.add_argument(
+        "-w",
+        "--watch",
+        action="store_true",
+        help="Run continuously as a background watcher daemon.",
+    )
+
+    parser.add_argument(
+        "-n",
+        "--dry-run",
+        action="store_true",
+        help="Display actions without actually moving files.",
+    )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Enable verbose / debug log output.",
+    )
+    parser.add_argument(
+        "--downloads-dir",
+        type=Path,
+        default=Path.home() / "Downloads",
+        help="Custom Downloads directory path (default: ~/Downloads).",
+    )
+    parser.add_argument(
+        "--home-dir",
+        type=Path,
+        default=Path.home(),
+        help="Custom Home directory path (default: ~).",
+    )
+    parser.add_argument(
+        "--interval",
+        type=float,
+        default=3.0,
+        help="Polling interval in seconds for --watch mode (default: 3.0).",
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv: Optional[List[str]] = None) -> int:
+    args = parse_args(argv)
+
+    log_level = logging.DEBUG if args.verbose else logging.INFO
+    logging.basicConfig(
+        level=log_level,
+        format="%(asctime)s [%(levelname)s] %(message)s",
+        datefmt="%H:%M:%S",
+    )
+
+    home_dir: Path = args.home_dir.resolve()
+    downloads_dir: Path = args.downloads_dir.resolve()
+
+    if args.watch:
+        run_watch(
+            home_dir=home_dir,
+            downloads_dir=downloads_dir,
+            interval=args.interval,
+            dry_run=args.dry_run,
+        )
+        return 0
+    else:
+        count = run_once(
+            home_dir=home_dir,
+            downloads_dir=downloads_dir,
+            dry_run=args.dry_run,
+        )
+        logger.info("Sorted %d file(s).", count)
+        return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

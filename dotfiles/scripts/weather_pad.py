@@ -200,10 +200,9 @@ class WeatherApp:
         # Target dimensions matching other bench pads (80% width x 88% height)
         sw = self.root.winfo_screenwidth()
         sh = self.root.winfo_screenheight()
-        target_w = int(sw * 0.8)
+        target_w = min(1500, int(sw * 0.8))
         target_h = int(sh * 0.88)
         self.root.geometry(f"{target_w}x{target_h}")
-        self.root.minsize(target_w, target_h)
 
         self.manager = WeatherManager()
         self.selected_day_idx = 0  # 0: Today, 1: Tomorrow, 2: Day After
@@ -814,8 +813,16 @@ class WeatherApp:
                 day_glyph, day_color = get_weather_icon(day_desc)
                 rain_chance = noon_slot.get("chanceofrain", "0")
                 snow_chance = noon_slot.get("chanceofsnow", "0")
+                try:
+                    snow_val = int(snow_chance)
+                except (ValueError, TypeError):
+                    snow_val = 0
+                try:
+                    rain_val = int(rain_chance)
+                except (ValueError, TypeError):
+                    rain_val = 0
 
-                precip_summary = f"{rain_chance}% Rain" if int(snow_chance) == 0 else f"{snow_chance}% Snow"
+                precip_summary = f"{snow_val}% Snow" if snow_val > 0 else f"{rain_val}% Rain"
 
                 labels["title"].configure(text=card_title)
                 labels["date"].configure(text=display_date)
@@ -860,8 +867,12 @@ class WeatherApp:
                 rain_chance = hour_entry.get("chanceofrain", "0")
                 snow_chance = hour_entry.get("chanceofsnow", "0")
                 wind_speed = hour_entry.get("windspeedMiles", "--")
+                try:
+                    h_snow_val = int(snow_chance)
+                except (ValueError, TypeError):
+                    h_snow_val = 0
 
-                precip_text = f"{rain_chance}% Rain" if int(snow_chance) == 0 else f"{snow_chance}% Snow"
+                precip_text = f"{snow_chance}% Snow" if h_snow_val > 0 else f"{rain_chance}% Rain"
 
                 slot_widgets["time"].configure(text=time_str)
                 slot_widgets["icon"].configure(text=h_glyph, fg=THEME[h_color])

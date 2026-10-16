@@ -20,6 +20,8 @@ fi
 
 # 3. Start Polkit agent (if installed)
 for agent in \
+    /usr/lib/x86_64-linux-gnu/libexec/polkit-kde-authentication-agent-1 \
+    /usr/libexec/polkit-kde-authentication-agent-1 \
     /usr/lib/policykit-1-gnome/polkit-gnome-authentication-agent-1 \
     /usr/libexec/polkit-gnome-authentication-agent-1 \
     /usr/bin/lxpolkit; do
@@ -32,3 +34,9 @@ done
 # 4. Start XDG Desktop Portals (Firefox & GTK dark/light appearance integration)
 systemctl --user start xdg-desktop-portal xdg-desktop-portal-gtk 2>/dev/null || true
 
+# 5. Automatically organize Downloads on startup
+if command -v sorted >/dev/null 2>&1; then
+    sorted --once &
+elif [ -x "$HOME/.local/bin/sorted" ]; then
+    "$HOME/.local/bin/sorted" --once &
+fi

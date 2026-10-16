@@ -15,7 +15,7 @@ echo "Choose an action:"
 echo "  1) Copy dotfiles to ~ (Standard cp)"
 echo "  2) Symlink dotfiles to ~ (via GNU Stow)"
 echo "  3) Install packages from installed_packages.txt"
-echo "  4) Everything (Packages + Copy Dotfiles)"
+echo "  4) Everything (Packages + Symlink Dotfiles via Stow)"
 echo "  q) Quit"
 echo ""
 read -rp "Enter choice [1-4, q]: " choice
@@ -72,7 +72,7 @@ case "$choice" in
         ;;
     4)
         install_packages
-        copy_dotfiles
+        stow_dotfiles
         ;;
     q|Q)
         echo "Exiting."

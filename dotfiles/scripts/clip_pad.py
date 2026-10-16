@@ -226,10 +226,9 @@ class ClipPadApp:
         # Set initial dimensions to match Qtile DropDown proportions
         sw = self.root.winfo_screenwidth()
         sh = self.root.winfo_screenheight()
-        target_w = int(sw * 0.8)
+        target_w = min(1500, int(sw * 0.8))
         target_h = int(sh * 0.88)
         self.root.geometry(f"{target_w}x{target_h}")
-        self.root.minsize(target_w, target_h)
 
         self.history = []
         self.cards = []
@@ -448,7 +447,7 @@ class ClipPadApp:
     def _load_history(self):
         """Load clipboard history from disk."""
         if not os.path.exists(CACHE_DIR):
-            os.makedirs(CACHE_DIR, exist_ok=True)
+            os.makedirs(CACHE_DIR, mode=0o700, exist_ok=True)
 
         if os.path.exists(HISTORY_FILE):
             try:
@@ -458,16 +457,25 @@ class ClipPadApp:
                 self.history = []
 
     def _save_history(self):
-        """Save clipboard history to disk atomically."""
+        """Save clipboard history to disk atomically with restricted permissions."""
+        fd = None
         try:
             if not os.path.exists(CACHE_DIR):
-                os.makedirs(CACHE_DIR, exist_ok=True)
+                os.makedirs(CACHE_DIR, mode=0o700, exist_ok=True)
             tmp_path = f"{HISTORY_FILE}.tmp"
-            with open(tmp_path, "w", encoding="utf-8") as f:
+            fd = os.open(tmp_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with open(fd, "w", encoding="utf-8") as f:
+                fd = None  # Stream ownership transferred to context manager
                 json.dump(self.history[:MAX_HISTORY_ENTRIES], f, indent=2, ensure_ascii=False)
             os.replace(tmp_path, HISTORY_FILE)
         except Exception:
             pass
+        finally:
+            if fd is not None:
+                try:
+                    os.close(fd)
+                except OSError:
+                    pass
 
     def _add_to_history(self, text: str, save: bool = True) -> bool:
         """Add new text entry if not identical to the most recent."""
@@ -616,7 +624,7 @@ class ClipPadApp:
         self.root.bind("<Return>", lambda e: self._copy_and_toast())
         self.root.bind("c", lambda e: self._copy_and_toast() if self.root.focus_get() != self.search_entry else None)
         self.root.bind("d", lambda e: self._delete_selected() if self.root.focus_get() != self.search_entry else None)
-        self.root.bind("<Delete>", lambda e: self._delete_selected())
+        self.root.bind("<Delete>", lambda e: self._delete_selected() if self.root.focus_get() != self.search_entry else None)
         self.root.bind("<C>", lambda e: self._clear_all() if self.root.focus_get() != self.search_entry else None)
 
     def _navigate(self, delta: int):

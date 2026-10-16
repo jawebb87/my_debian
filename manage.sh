@@ -73,7 +73,7 @@ backup_conflicts_for_package() {
             # Broken symlink
             rm -f "$dest_file"
         fi
-    done < <(find . -type f -print0 -o -type l -print0)
+    done < <(find . -path '*/__pycache__*' -prune -o -type f -print0 -o -type l -print0)
     cd "$REPO_DIR"
 }
 
@@ -163,7 +163,7 @@ cmd_status() {
                 all_ok=false
                 echo -e "  ${RED}✗${NC} $pkg: $dest_file is NOT a symlink"
             fi
-        done < <(cd "$DOTFILES_DIR/$pkg" && find . -type f -print0 -o -type l -print0)
+        done < <(cd "$DOTFILES_DIR/$pkg" && find . -path '*/__pycache__*' -prune -o -type f -print0 -o -type l -print0)
         if [ "$pkg_ok" = true ]; then
             echo -e "  ${GREEN}✓${NC} ${BOLD}$pkg${NC} ($count files linked)"
         fi
@@ -182,7 +182,7 @@ cmd_status() {
                 all_ok=false
                 echo -e "  ${RED}✗${NC} scripts: $dest_file is NOT a symlink"
             fi
-        done < <(cd "$DOTFILES_DIR/scripts" && find . -type f -print0 -o -type l -print0)
+        done < <(cd "$DOTFILES_DIR/scripts" && find . -path '*/__pycache__*' -prune -o -type f -print0 -o -type l -print0)
         if [ "$scripts_ok" = true ]; then
             echo -e "  ${GREEN}✓${NC} ${BOLD}scripts${NC} ($count scripts linked to qtile_bench)"
         fi

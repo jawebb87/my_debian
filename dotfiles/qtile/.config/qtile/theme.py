@@ -50,34 +50,36 @@ GRUVBOX_DARK_THEME = {
 
 GRUVBOX_LIGHT_THEME = {
     "bg": "#f2e5bc",           # Gruvbox Soft parchment background
-    "bg_surface": "#ebdbb2",   # Darker parchment surface
-    "bg_card": "#e0d1a7",      # Container card / parchment paper
-    "bg_hover": "#d5c4a1",     # Warm tan hover
-    "bg_active": "#bdae93",    # Active selection
-    "bg_selected": "#e0d1a7",  # Selected card
-    "border": "#d5c4a1",       # Soft parchment border
-    "border_focus": "#076678", # Deep teal/blue accent border
-    "border_today": "#b57614", # Warm amber border for Today
-    "fg": "#3c3836",           # Dark charcoal / ink text
-    "fg_dim": "#7c6f64",       # Muted ink text
-    "fg_header": "#282828",    # Deep contrast ink text
-    "key_bg": "#d5c4a1",       # Parchment key badge background
-    "key_fg": "#b57614",       # Warm amber for key text
-    "status_running": "#79740e", # Deep green
-    "status_stopped": "#9d0006", # Deep red
-    "status_paused": "#b57614",  # Warm yellow
-    "accent_blue": "#076678",  # Information accent
-    "accent_aqua": "#427b58",  # URL / code accent
-    "accent_green": "#79740e", # Success accent
-    "accent_yellow": "#b57614",# Yellow accent
-    "accent_orange": "#af3a03",# Orange accent
-    "accent_purple": "#8f3f71",# Special accent
-    "accent_red": "#9d0006",   # Danger accent
+    "bg_surface": "#ebdbb2",   # Darker parchment surface framing
+    "bg_card": "#fbf1c7",      # Clean ivory elevated paper card (13.0:1 text contrast!)
+    "bg_hover": "#ebdbb2",     # Warm parchment hover
+    "bg_active": "#d5c4a1",    # Active selection
+    "bg_selected": "#ebdbb2",  # Selected card surface
+    "border": "#d5c4a1",       # Soft warm parchment border
+    "border_focus": "#076678", # Deep teal/blue accent border (5.25:1)
+    "border_today": "#9d3202", # Warm rust/amber border for Today (5.3:1)
+    "fg": "#3c3836",           # Dark charcoal ink text (10.2:1 on card)
+    "fg_dim": "#504945",       # Muted ink text (7.8:1 on card, 7.0:1 on bg)
+    "fg_header": "#282828",    # Deep contrast ink text (13.0:1 on card)
+    "key_bg": "#282828",       # Crisp physical keycap badge background (13.0:1)
+    "key_fg": "#fbf1c7",       # Warm ivory text for key badges
+    "status_running": "#425e0b", # Deep forest/moss green (6.5:1 on card)
+    "status_stopped": "#9d0006", # Deep crimson red (7.6:1 on card)
+    "status_paused": "#8f4a00",  # Deep golden bronze/amber (5.9:1 on card)
+    "accent_blue": "#076678",  # Deep teal/blue accent (5.8:1 on card)
+    "accent_aqua": "#1b6348",  # Deep pine aqua accent (6.3:1 on card)
+    "accent_green": "#425e0b", # Success accent (6.5:1 on card)
+    "accent_yellow": "#8f4a00",# Golden amber accent (5.9:1 on card)
+    "accent_orange": "#af3a03",# Burnt orange accent (5.4:1 on card)
+    "accent_purple": "#8f3f71",# Deep plum purple accent (5.9:1 on card)
+    "accent_red": "#9d0006",   # Danger accent (7.6:1 on card)
 }
 
 GRUVBOX_DARK_COLORS = {
     "bg": "#282828",
     "fg": "#ebdbb2",
+    "pill_fg": "#282828",       # Dark text on colored pills (preserving dark perfection)
+    "pill_notice": "#fabd2f",   # Bright yellow text on dark_gray for updates & thermal
     "selection_bg": "#665c54",
     "cursor": "#ebdbb2",
     "gray": "#928374",
@@ -99,24 +101,26 @@ GRUVBOX_DARK_COLORS = {
 
 GRUVBOX_LIGHT_COLORS = {
     "bg": "#f2e5bc",           # Soft parchment background for top bar
-    "fg": "#3c3836",           # Dark ink text
-    "selection_bg": "#d5c4a1",
-    "cursor": "#3c3836",
-    "gray": "#7c6f64",
-    "dark_gray": "#e0d1a7",    # Pill container surface
-    "light_gray": "#928374",
-    "bright_red": "#9d0006",
-    "bright_green": "#79740e",
-    "bright_yellow": "#b57614",
-    "bright_blue": "#076678",
-    "bright_purple": "#8f3f71",
-    "bright_aqua": "#427b58",
-    "neutral_red": "#cc241d",
-    "neutral_green": "#98971a",
-    "neutral_yellow": "#d79921",
-    "neutral_blue": "#458588",
-    "neutral_purple": "#b16286",
-    "neutral_aqua": "#689d6a",
+    "fg": "#282828",           # Deep dark charcoal ink text (11.7:1 contrast on parchment)
+    "pill_fg": "#fbf1c7",      # Clean ivory text on deep colored status pills (5.5+:1 contrast)
+    "pill_notice": "#9d3202",  # Deep rust amber for ThermalSensor & CheckUpdates (5.3:1 on dark_gray)
+    "selection_bg": "#d5c4a1", # Warm tan selection/unfocused border
+    "cursor": "#282828",
+    "gray": "#504945",         # High-contrast muted text (6.4:1 on dark_gray, 7.0:1 on bg)
+    "dark_gray": "#ebdbb2",    # Crisp parchment container surface for GroupBox/Clock/Systray
+    "light_gray": "#7c6f64",
+    "bright_red": "#9d0006",   # Deep crimson alert (7.6:1)
+    "bright_green": "#425e0b", # Deep moss green (5.9:1)
+    "bright_yellow": "#8f4a00",# Deep golden bronze/amber (5.3:1)
+    "bright_blue": "#076678",  # Deep teal/blue (5.25:1)
+    "bright_purple": "#8f3f71",# Deep plum purple (5.36:1)
+    "bright_aqua": "#1b6348",  # Deep pine aqua (5.71:1)
+    "neutral_red": "#9d0006",   # Rich red status pill (6.86:1 vs bar, 7.60:1 vs pill_fg)
+    "neutral_green": "#425e0b", # Rich green status pill (5.89:1 vs bar, 6.52:1 vs pill_fg)
+    "neutral_yellow": "#8f4a00",# Rich golden bronze status pill (5.31:1 vs bar, 5.88:1 vs pill_fg)
+    "neutral_blue": "#076678",  # Rich blue status pill (5.25:1 vs bar, 5.82:1 vs pill_fg)
+    "neutral_purple": "#8f3f71",# Rich purple status pill (5.36:1 vs bar, 5.94:1 vs pill_fg)
+    "neutral_aqua": "#1b6348",  # Rich teal aqua status pill (5.71:1 vs bar, 6.33:1 vs pill_fg)
 }
 
 
@@ -234,6 +238,35 @@ def update_external_apps(mode: str):
         pass
 
 
+def get_wallpaper(mode: str | None = None) -> str | None:
+    """Retrieve appropriate wallpaper path for dark/light mode from ~/Pictures."""
+    if mode is None:
+        mode = get_current_mode()
+    pictures_dir = os.path.expanduser("~/Pictures")
+    if mode == "light":
+        candidates = [
+            "light_wallpaper.png",
+            "light_wallpaper.jpg",
+            "light_wallpaper.jpeg",
+            "wallpaper_light.png",
+            "wallpaper_light.jpg",
+        ]
+    else:
+        candidates = [
+            "dark_wallpaper.png",
+            "dark_wallpaper.jpg",
+            "dark_wallpaper.jpeg",
+            "wallpaper_dark.png",
+            "wallpaper_dark.jpg",
+        ]
+
+    for name in candidates:
+        candidate_path = os.path.join(pictures_dir, name)
+        if os.path.exists(candidate_path):
+            return candidate_path
+    return None
+
+
 def toggle_theme() -> str:
     """Flip between dark and light modes, update external apps, and return new mode."""
     current = get_current_mode()
@@ -243,6 +276,7 @@ def toggle_theme() -> str:
     return new_mode
 
 
-# Module-level alias for convenient direct imports
+# Module-level aliases for convenient direct imports
 THEME = get_theme()
 COLORS = get_colors()
+WALLPAPER = get_wallpaper()

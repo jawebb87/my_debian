@@ -10,6 +10,7 @@
 
 # --- Desktop & Window Management ---
 dunst
+libnotify-bin
 lightdm
 picom
 polkit-kde-agent-1
@@ -18,6 +19,8 @@ rofi
 scrot
 suckless-tools
 xclip
+xdg-desktop-portal
+xdg-desktop-portal-gtk
 xsel
 xserver-xorg
 
@@ -32,12 +35,15 @@ eza
 fzf
 git
 inetutils-telnet
+ipython3
+iw
 kitty
 lsof
 make
 micro
 netcat-traditional
 pciutils
+ranger
 ripgrep
 stow
 traceroute
@@ -45,6 +51,7 @@ usbutils
 w3m
 w3m-img
 wget
+wpasupplicant
 
 # --- GUI Applications ---
 dolphin
@@ -70,6 +77,9 @@ fonts-powerline
 
 # --- Python Stack (Qtile & Cheatsheet) ---
 python3-cffi
+python3-dateutil
+python3-dbus
+python3-gi
 python3-psutil
 python3-tk
 

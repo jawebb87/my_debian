@@ -173,7 +173,6 @@ echo -e "${COLOR_GRAY}Starting playback... (Press 'q' to quit, 'space' to pause)
 exec mpv \
     "${MPV_VO_OPTS[@]}" \
     --ytdl-format="$YTDL_FORMAT" \
-    --ytdl-raw-options=extractor-args="youtube:player_client=android" \
     --script-opts=ytdl_hook-ytdl_path="${HOME}/.local/bin/yt-dlp" \
     --terminal=yes \
     --msg-level=all=warn,statusline=status \

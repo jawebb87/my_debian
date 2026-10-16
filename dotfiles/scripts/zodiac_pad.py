@@ -64,8 +64,8 @@ class CalendarManager:
     """Handles fetching, parsing, and caching iCal Google Calendar events."""
 
     def __init__(self):
-        os.makedirs(CONFIG_DIR, exist_ok=True)
-        os.makedirs(CACHE_DIR, exist_ok=True)
+        os.makedirs(CONFIG_DIR, mode=0o700, exist_ok=True)
+        os.makedirs(CACHE_DIR, mode=0o700, exist_ok=True)
         self.config = self._load_config()
         self.events = self._load_cached_events()
         self.last_sync_time = self._get_cache_mtime()
@@ -84,7 +84,8 @@ class CalendarManager:
     def save_config(self, ical_url):
         self.config["ical_url"] = ical_url.strip()
         try:
-            with open(CONFIG_FILE, "w") as f:
+            fd = os.open(CONFIG_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with open(fd, "w", encoding="utf-8") as f:
                 json.dump(self.config, f, indent=2)
         except Exception:
             pass
@@ -156,8 +157,15 @@ class CalendarManager:
 
         for block in re.findall(r"BEGIN:VEVENT(.*?)END:VEVENT", unfolded, re.DOTALL):
             evt = {}
+            in_valarm = False
             for line in block.strip().splitlines():
-                if ":" not in line:
+                if "BEGIN:VALARM" in line:
+                    in_valarm = True
+                    continue
+                elif "END:VALARM" in line:
+                    in_valarm = False
+                    continue
+                if in_valarm or ":" not in line:
                     continue
                 key_part, val = line.split(":", 1)
                 key = key_part.split(";")[0].upper()
@@ -170,9 +178,11 @@ class CalendarManager:
                     evt["location"] = val.replace("\\,", ",").strip()
                 elif key == "DTSTART":
                     evt["dtstart_raw"] = val.strip()
+                    evt["dtstart_key"] = key_part
                     evt["is_all_day"] = ("VALUE=DATE" in key_part) or (len(val.strip()) == 8)
                 elif key == "DTEND":
                     evt["dtend_raw"] = val.strip()
+                    evt["dtend_key"] = key_part
                 elif key == "RRULE":
                     evt["rrule"] = val.strip()
                 elif key == "STATUS":
@@ -206,16 +216,21 @@ class CalendarManager:
                         "timestamp": int(datetime.datetime(start_date.year, start_date.month, start_date.day).timestamp())
                     })
                 else:
+                    tz_match = re.search(r"TZID=([^;:]+)", r.get("dtstart_key", ""))
+                    param_tz = tz.gettz(tz_match.group(1).strip('"\'')) if tz_match else None
+
                     dt_start = dt_parser.parse(dt_raw)
                     if dt_start.tzinfo is None:
-                        dt_start = dt_start.replace(tzinfo=tz.tzutc())
+                        dt_start = dt_start.replace(tzinfo=param_tz or tz.tzutc())
                     local_start = dt_start.astimezone(self.local_tz)
 
                     duration = datetime.timedelta(hours=1)
                     if "dtend_raw" in r:
+                        end_tz_match = re.search(r"TZID=([^;:]+)", r.get("dtend_key", ""))
+                        end_param_tz = tz.gettz(end_tz_match.group(1).strip('"\'')) if end_tz_match else None
                         dt_end = dt_parser.parse(r["dtend_raw"])
                         if dt_end.tzinfo is None:
-                            dt_end = dt_end.replace(tzinfo=tz.tzutc())
+                            dt_end = dt_end.replace(tzinfo=end_param_tz or param_tz or tz.tzutc())
                         local_end = dt_end.astimezone(self.local_tz)
                         duration = local_end - local_start
 
@@ -278,10 +293,9 @@ class ZodiacApp:
 
         sw = self.root.winfo_screenwidth()
         sh = self.root.winfo_screenheight()
-        target_w = int(sw * 0.8)
+        target_w = min(1500, int(sw * 0.8))
         target_h = int(sh * 0.88)
         self.root.geometry(f"{target_w}x{target_h}")
-        self.root.minsize(target_w, target_h)
 
         self.cal_mgr = CalendarManager()
 

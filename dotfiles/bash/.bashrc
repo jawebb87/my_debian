@@ -122,9 +122,11 @@ if ! shopt -oq posix; then
   fi
 fi
 
-[[ $- = *i* ]] && source ~/liquidprompt/liquidprompt
-source ~/liquidprompt-powerline/powerline.theme
-lp_theme powerline
+[[ $- = *i* ]] && [ -f ~/liquidprompt/liquidprompt ] && source ~/liquidprompt/liquidprompt
+if [ -f ~/liquidprompt-powerline/powerline.theme ]; then
+    source ~/liquidprompt-powerline/powerline.theme
+    command -v lp_theme &>/dev/null && lp_theme powerline
+fi
 # Added by Antigravity CLI installer
 export PATH="/home/jaws/.local/bin:$PATH"
 [[ ${BLE_VERSION-} ]] && ble-attach

@@ -247,11 +247,55 @@ def toggle_desktop_theme(qtile):
     - Switches Kitty terminal palette live via SIGUSR1
     - Updates Rofi theme between gruvbox-dark.rasi and gruvbox-light.rasi
     - Resets dropdown scratchpads to pick up the new palette on next launch
+    - Dynamically paints the corresponding dark/light wallpaper
     - Hot-reloads Qtile in-place to update the top bar and window borders
     """
     new_mode = theme.toggle_theme()
+    wallpaper = theme.get_wallpaper(new_mode)
+    if wallpaper:
+        for screen in qtile.screens:
+            screen.set_wallpaper(wallpaper, "fill")
     qtile.reload_config()
 
+
+def is_limusic_mini(win) -> bool:
+    """
+    Helper function to identify Limusic's compact mini player window.
+    Distinguishes the floating mini widget from the main tiling player window.
+    """
+    if not win or not hasattr(win, "wid"):
+        return False
+    try:
+        classes = [c.lower() for c in (win.get_wm_class() or [])]
+        name = getattr(win, "name", "") or ""
+        return ("limusic-app" in classes or "limusic" in classes) and "mini player" in name.lower()
+    except Exception:
+        return False
+
+
+def is_sticky_window(win) -> bool:
+    """Return True if window is explicitly pinned as sticky or is Limusic Mini Player."""
+    if not win or not hasattr(win, "wid"):
+        return False
+    return getattr(win, "sticky", False) or is_limusic_mini(win)
+
+
+@lazy.function
+def toggle_sticky(qtile, window=None):
+    """
+    Toggles sticky (pinned) state for the active or target window.
+    Sticky windows remain floating, stay on top, and travel across workspaces with the user.
+    """
+    win = window or qtile.current_window
+    if not win or not hasattr(win, "wid"):
+        return
+    win.sticky = not getattr(win, "sticky", False)
+    if win.sticky:
+        win.floating = True
+        if hasattr(win, "keep_above"):
+            win.keep_above(True)
+        if hasattr(win, "bring_to_front"):
+            win.bring_to_front()
 
 
 # ==============================================================================
@@ -354,6 +398,7 @@ keys = [
     Key([alt], "F11", lazy.window.toggle_fullscreen(), desc="Toggle fullscreen"),
     Key([mod, shift], "f", lazy.window.toggle_fullscreen(), desc="Toggle fullscreen"),
     Key([alt], "space", lazy.window.toggle_floating(), desc="Toggle floating"),
+    Key([mod, shift], "s", toggle_sticky, desc="Toggle sticky pinned state for active window"),
 
     # --------------------------------------------------------------------------
     # 4.8 Workspace Navigation
@@ -710,9 +755,7 @@ layouts = [
 # Widgets are lightweight asynchronous coroutines or threads that update their state without
 # blocking the main window manager thread or freezing the desktop during heavy system load.
 # ==============================================================================
-wallpaper_file = "/home/jaws/Pictures/wallpaper/tux.png"
-if not os.path.exists(wallpaper_file):
-    wallpaper_file = None
+wallpaper_file = theme.get_wallpaper()
 
 # Default font and sizing applied across all bar widgets
 # Font fallback: FontAwesome primary for icons + DejaVu Sans Mono fallback for text
@@ -725,6 +768,151 @@ widget_defaults = dict(
 extension_defaults = widget_defaults.copy()
 
 
+_last_docker_status = " 0"
+
+
+def poll_docker_status() -> str:
+    """
+    Polls active Docker containers count.
+    Returns:
+    - ' {count}' when Docker daemon is accessible
+    - ' off' when Docker daemon is not running or unreachable
+    """
+    global _last_docker_status
+    try:
+        out = subprocess.check_output(
+            ["docker", "ps", "-q"],
+            stderr=subprocess.DEVNULL,
+            text=True,
+            timeout=3.0,
+        ).strip()
+        count = len(out.splitlines()) if out else 0
+        _last_docker_status = f" {count}"
+        return _last_docker_status
+    except subprocess.TimeoutExpired:
+        return _last_docker_status
+    except Exception:
+        return " off"
+
+
+class WpctlVolume(widget.Volume):
+    """
+    Volume widget backed by WirePlumber / PipeWire (wpctl).
+    Supports mouse scroll for volume up/down, right-click to toggle mute,
+    and left-click to toggle the audio-pad scratchpad.
+    """
+    def get_volume(self):
+        try:
+            out = subprocess.check_output(
+                ["wpctl", "get-volume", "@DEFAULT_AUDIO_SINK@"],
+                stderr=subprocess.DEVNULL,
+                text=True,
+                timeout=1.0,
+            ).strip()
+            # Format: 'Volume: 0.40' or 'Volume: 0.40 [MUTED]'
+            parts = out.split()
+            if len(parts) >= 2:
+                vol = int(round(float(parts[1]) * 100))
+                muted = "[MUTED]" in out
+                return vol, muted
+        except Exception:
+            pass
+        return -1, False
+
+
+def poll_gpu_status() -> str:
+    """
+    Polls AMD GPU metrics dynamically from sysfs.
+    Distinguishes dedicated GPU (dGPU, 3D controller) from integrated GPU (iGPU, boot_vga).
+    - If dGPU is active (not in D3cold runtime suspend): ' dGPU {busy}% {temp}°C'
+    - If dGPU is suspended or absent: ' GPU {temp}°C' using the display GPU temperature.
+    """
+    drm_dir = "/sys/class/drm"
+    if not os.path.isdir(drm_dir):
+        return " GPU N/A"
+
+    cards = sorted([
+        os.path.join(drm_dir, d, "device")
+        for d in os.listdir(drm_dir)
+        if re.match(r"^card\d+$", d) and os.path.isdir(os.path.join(drm_dir, d, "device"))
+    ])
+
+    dgpu_card = None
+    igpu_card = None
+
+    for card in cards:
+        boot_vga = os.path.join(card, "boot_vga")
+        pci_class_file = os.path.join(card, "class")
+        pci_class = ""
+        if os.path.exists(pci_class_file):
+            try:
+                with open(pci_class_file, "r") as f:
+                    pci_class = f.read().strip()
+            except Exception:
+                pass
+
+        is_boot_vga = False
+        if os.path.exists(boot_vga):
+            try:
+                with open(boot_vga, "r") as f:
+                    is_boot_vga = (f.read().strip() == "1")
+            except Exception:
+                pass
+
+        if is_boot_vga or pci_class == "0x030000":
+            igpu_card = card
+        else:
+            dgpu_card = card
+
+    def get_temp(card_path: str):
+        if not card_path:
+            return None
+        hw_dir = os.path.join(card_path, "hwmon")
+        if os.path.isdir(hw_dir):
+            try:
+                for hw in os.listdir(hw_dir):
+                    tf = os.path.join(hw_dir, hw, "temp1_input")
+                    if os.path.exists(tf):
+                        with open(tf, "r") as f:
+                            return int(f.read().strip()) // 1000
+            except Exception:
+                pass
+        return None
+
+    # Check dedicated GPU state first
+    if dgpu_card:
+        power_file = os.path.join(dgpu_card, "power_state")
+        is_d3cold = False
+        if os.path.exists(power_file):
+            try:
+                with open(power_file, "r") as f:
+                    is_d3cold = (f.read().strip() == "D3cold")
+            except Exception:
+                pass
+
+        if not is_d3cold:
+            busy_file = os.path.join(dgpu_card, "gpu_busy_percent")
+            busy = None
+            if os.path.exists(busy_file):
+                try:
+                    with open(busy_file, "r") as f:
+                        busy = int(f.read().strip())
+                except Exception:
+                    pass
+
+            temp = get_temp(dgpu_card)
+            if busy is not None:
+                t_part = f" {temp}°C" if temp is not None else ""
+                return f" dGPU {busy}%{t_part}"
+
+    # Fall back to display / iGPU temperature (avoids broken Picasso APU gpu_busy_percent bug)
+    active_temp = get_temp(igpu_card) or get_temp(dgpu_card)
+    if active_temp is not None:
+        return f" GPU {active_temp}°C"
+
+    return " GPU N/A"
+
+
 screens = [
     Screen(
         top=bar.Bar(
@@ -733,7 +921,7 @@ screens = [
                 widget.CurrentLayout(
                     fmt=" {}",
                     background=colors["neutral_blue"],
-                    foreground=colors["bg"],
+                    foreground=colors["pill_fg"],
                     padding=8,
                 ),
                 # Visual workspace switcher (clickable group indicators)
@@ -777,12 +965,80 @@ screens = [
                     padding=6,
                     icon_size=16,
                 ),
+                # Real-time network throughput (download / upload)
+                widget.Net(
+                    format=" {down:.1f}{down_suffix}  {up:.1f}{up_suffix}",
+                    update_interval=2.0,
+                    background=colors["neutral_purple"],
+                    foreground=colors["pill_fg"],
+                    padding=8,
+                ),
+                # Active Docker container count (click toggles docker-pad dropdown)
+                widget.GenPollText(
+                    func=poll_docker_status,
+                    update_interval=5.0,
+                    mouse_callbacks={
+                        "Button1": lazy.group["scratchpad"].dropdown_toggle("docker-pad"),
+                    },
+                    background=colors["neutral_blue"],
+                    foreground=colors["pill_fg"],
+                    padding=8,
+                ),
+                # Pending Debian package updates (click launches floating update inspect window)
+                widget.CheckUpdates(
+                    custom_command="apt-get -s upgrade | grep -E '^Inst '",
+                    display_format=" {updates}",
+                    no_update_string=" 0",
+                    update_interval=1800,
+                    colour_have_updates=colors["pill_notice"],
+                    colour_no_updates=colors["fg"],
+                    background=colors["dark_gray"],
+                    mouse_callbacks={
+                        "Button1": lazy.spawn("kitty --class=pkg-updates -e bash -c 'echo \"=== Upgradable Packages ===\"; apt list --upgradable; echo \"\"; read -p \"Press Enter to exit...\"'"),
+                    },
+                    padding=8,
+                ),
+                # Root NVMe partition free space (click toggles btop resource monitor)
+                widget.DF(
+                    visible_on_warn=False,
+                    partition="/",
+                    format=" {uf}{m}",
+                    measure="G",
+                    update_interval=30,
+                    background=colors["neutral_aqua"],
+                    foreground=colors["pill_fg"],
+                    warn_color=colors["bright_red"],
+                    warn_space=10,
+                    mouse_callbacks={
+                        "Button1": lazy.group["scratchpad"].dropdown_toggle("btop"),
+                    },
+                    padding=8,
+                ),
                 # Real-time CPU utilization percentage
                 widget.CPU(
                     format=" {load_percent}%",
                     update_interval=2.0,
                     background=colors["neutral_yellow"],
-                    foreground=colors["bg"],
+                    foreground=colors["pill_fg"],
+                    padding=8,
+                ),
+                # Real-time CPU core temperature (Tctl on AMD Ryzen)
+                widget.ThermalSensor(
+                    tag_sensor="Tctl",
+                    format=" {temp:.0f}{unit}",
+                    update_interval=2.0,
+                    threshold=75,
+                    foreground_alert=colors["bright_red"],
+                    background=colors["dark_gray"],
+                    foreground=colors["pill_notice"],
+                    padding=8,
+                ),
+                # Real-time GPU status (active GPU temperature / dGPU utilization)
+                widget.GenPollText(
+                    func=poll_gpu_status,
+                    update_interval=2.0,
+                    background=colors["neutral_aqua"],
+                    foreground=colors["pill_fg"],
                     padding=8,
                 ),
                 # Real-time RAM utilization in Gigabytes
@@ -790,8 +1046,25 @@ screens = [
                     format=" {MemUsed:.1f}G",
                     measure_mem="G",
                     update_interval=2.0,
-                    background=colors["neutral_aqua"],
-                    foreground=colors["bg"],
+                    background=colors["neutral_blue"],
+                    foreground=colors["pill_fg"],
+                    padding=8,
+                ),
+                # Master Audio / Volume Controller (PipeWire / WirePlumber wpctl)
+                WpctlVolume(
+                    volume_up_command="wpctl set-volume -l 1.5 @DEFAULT_AUDIO_SINK@ 5%+",
+                    volume_down_command="wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-",
+                    mute_command="wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle",
+                    unmute_format=" {volume}%",
+                    mute_format=" {volume}%",
+                    update_interval=1.0,
+                    background=colors["neutral_purple"],
+                    foreground=colors["pill_fg"],
+                    mute_foreground=colors["bright_red"],
+                    mouse_callbacks={
+                        "Button1": lazy.group["scratchpad"].dropdown_toggle("audio-pad"),
+                        "Button3": lazy.spawn("wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"),
+                    },
                     padding=8,
                 ),
                 # Laptop battery status and discharge indicator
@@ -804,14 +1077,14 @@ screens = [
                     empty_char="",
                     update_interval=10,
                     background=colors["neutral_green"],
-                    foreground=colors["bg"],
+                    foreground=colors["pill_fg"],
                     padding=8,
                 ),
                 # Formatted real-time date and clock
                 widget.Clock(
                     format=" %a %b %d   %I:%M %p",
-                    background=colors["neutral_blue"],
-                    foreground=colors["bg"],
+                    background=colors["dark_gray"],
+                    foreground=colors["fg"],
                     padding=8,
                 ),
                 # Quick power/session exit button (flush edge with no trailing arrow)
@@ -819,7 +1092,7 @@ screens = [
                     default_text="",
                     countdown_format="[{}]",
                     background=colors["neutral_red"],
-                    foreground=colors["bg"],
+                    foreground=colors["pill_fg"],
                     padding=10,
                 ),
             ],
@@ -864,12 +1137,16 @@ floating_layout = layout.Floating(
         # Dialogs and lightweight popup utilities
         Match(wm_class="pavucontrol"),
         Match(wm_class="polkit-gnome-authentication-agent-1"),
+        Match(wm_class="polkit-kde-authentication-agent-1"),
         Match(wm_class="blueman-manager"),
         Match(wm_class="nm-connection-editor"),
         Match(wm_class="galculator"),
         Match(wm_class="btop-float"),
+        Match(wm_class="pkg-updates"),
         Match(wm_class="kdialog"),
         Match(title="File Operation Progress"),
+        # Limusic YouTube Music Player (Mini Player widget)
+        Match(title=re.compile(r"^Limusic Mini Player", re.I)),
     ],
     border_focus=colors["bright_blue"],
     border_normal=colors["selection_bg"],
@@ -960,3 +1237,100 @@ def autostart():
     autostart_script = os.path.expanduser("~/.config/qtile/autostart.sh")
     if os.path.exists(autostart_script):
         subprocess.Popen([autostart_script])
+
+
+# ==============================================================================
+# SECTION 13: Sticky Windows & Limusic Mini Player Follower Hooks
+# ==============================================================================
+# [What it does]:
+# Keeps designated windows (such as Limusic's compact mini player widget or any window
+# pinned via Mod+Shift+S) floating on top and persistent across all virtual workspaces.
+#
+# [Python Concepts]:
+# 1. Event Subscriptions (`@hook.subscribe`):
+#    Subscribes observer functions to Qtile's event bus ('client_managed',
+#    'client_name_updated', and 'setgroup').
+# 2. Dynamic Window Relocation (`win.togroup`):
+#    Moves an existing live X11 window into a target workspace group without destroying
+#    or respawning its client process.
+# 3. Focus Preservation:
+#    Caches `curr_group.current_window` prior to migrating the sticky window and restores
+#    focus cleanly so workspace navigation does not steal active keyboard focus.
+#
+# [Architecture Reasoning]:
+# In Qtile, client windows belong to a single workspace Group. By subscribing to the
+# 'setgroup' hook, Qtile intercepts screen workspace transitions and migrates sticky clients
+# to the active group in-flight. It also preserves focus on the active task so music players
+# do not hijack keyboard input while navigating workspaces.
+# ==============================================================================
+@hook.subscribe.client_managed
+def on_client_managed_sticky(client):
+    """Ensure sticky windows and Limusic Mini Player float and stay on top upon creation."""
+    if is_sticky_window(client):
+        try:
+            client.floating = True
+            if hasattr(client, "keep_above"):
+                client.keep_above(True)
+            if hasattr(client, "bring_to_front"):
+                client.bring_to_front()
+        except Exception:
+            pass
+
+
+@hook.subscribe.client_name_updated
+def on_client_name_updated_sticky(client):
+    """Catch in-place title changes if Limusic updates its title to Mini Player after mapping."""
+    if is_sticky_window(client):
+        try:
+            client.floating = True
+            if hasattr(client, "keep_above"):
+                client.keep_above(True)
+            if hasattr(client, "bring_to_front"):
+                client.bring_to_front()
+        except Exception:
+            pass
+
+
+@hook.subscribe.setgroup
+def follow_sticky_windows():
+    """
+    Pulls sticky windows (including Limusic Mini Player) to the current workspace
+    whenever switching groups, preserving active workspace focus.
+    """
+    curr_group = qtile.current_group
+    if not curr_group:
+        return
+
+    # Skip scratchpad hidden group
+    if getattr(curr_group, "name", "") == "scratchpad" or hasattr(curr_group, "dropdowns"):
+        return
+
+    # Cache currently focused window on the target workspace
+    prev_focus = curr_group.current_window
+
+    for win in list(qtile.windows_map.values()):
+        # Validate that the client is managed and belongs to a workspace group
+        if not hasattr(win, "wid") or win.wid not in qtile.windows_map:
+            continue
+        if not hasattr(win, "group") or win.group is None:
+            continue
+
+        if is_sticky_window(win):
+            try:
+                if win.group != curr_group:
+                    win.togroup(curr_group.name)
+                win.floating = True
+                if hasattr(win, "keep_above"):
+                    win.keep_above(True)
+                if hasattr(win, "bring_to_front"):
+                    win.bring_to_front()
+            except Exception:
+                pass
+
+    # Restore previous window focus so sticky windows do not steal typing focus
+    if prev_focus and prev_focus.group == curr_group:
+        try:
+            curr_group.focus(prev_focus, warp=False)
+        except Exception:
+            pass
+

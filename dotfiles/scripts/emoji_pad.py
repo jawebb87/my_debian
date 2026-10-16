@@ -27,8 +27,15 @@ import os
 import re
 import json
 import subprocess
+import threading
 import tkinter as tk
 from tkinter import font as tkfont
+
+try:
+    from PIL import Image, ImageDraw, ImageFont, ImageTk
+    PIL_AVAILABLE = True
+except ImportError:
+    PIL_AVAILABLE = False
 
 # ==============================================================================
 # Theme: Central Gruvbox (Dark / Light via Super + o)
@@ -50,7 +57,26 @@ except Exception:
 CACHE_DIR = os.path.expanduser("~/.cache/emoji_pad")
 RECENT_FILE = os.path.join(CACHE_DIR, "recent.json")
 EMOJIS_CACHE = os.path.join(CACHE_DIR, "emojis.json")
+IMG_CACHE_DIR = os.path.join(CACHE_DIR, "img")
 SYSTEM_EMOJI_FILE = "/usr/share/unicode/emoji/emoji-test.txt"
+
+EMOJI_FONT_PATHS = [
+    "/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf",
+    os.path.expanduser("~/.local/share/fonts/NotoColorEmoji.ttf"),
+]
+
+
+def find_emoji_font_path() -> str | None:
+    for path in EMOJI_FONT_PATHS:
+        if os.path.exists(path):
+            return path
+    try:
+        out = subprocess.check_output(["fc-match", "-f", "%{file}", "Noto Color Emoji"], timeout=1).decode().strip()
+        if os.path.exists(out):
+            return out
+    except Exception:
+        pass
+    return None
 
 # Curated developer gitmojis & tags
 GITMOJIS = [
@@ -168,8 +194,16 @@ class EmojiPadApp:
         self.gap = 5
         self.cols = 7
 
+        # Image rendering & cache for complex ZWJ emojis
+        self.has_emoji_font = False
+        self.emoji_font = None
+        self._font_lock = threading.Lock()
+        self._img_cache: dict[tuple[str, int], ImageTk.PhotoImage] = {}
+        self._init_emoji_font()
+
         # Load datasets
         self._load_datasets()
+        self._start_background_precache()
 
         # Build UI layout
         self._build_header()
@@ -289,6 +323,95 @@ class EmojiPadApp:
         self.recent_emojis.insert(0, item)
         self.recent_emojis = self.recent_emojis[:40]
         self._save_recent()
+
+    # ==========================================================================
+    # Complex Emoji Image Rendering & Cache (HarfBuzz / Raqm for ZWJ)
+    # ==========================================================================
+    def _init_emoji_font(self):
+        """Initialize Pillow font and directory for complex emoji rendering."""
+        if not PIL_AVAILABLE:
+            return
+        os.makedirs(IMG_CACHE_DIR, exist_ok=True)
+        font_path = find_emoji_font_path()
+        if font_path:
+            try:
+                # NotoColorEmoji is a bitmap CBDT font with fixed strike size 109
+                self.emoji_font = ImageFont.truetype(font_path, 109, layout_engine=ImageFont.Layout.RAQM)
+                self.has_emoji_font = True
+            except Exception:
+                try:
+                    self.emoji_font = ImageFont.truetype(font_path, 109)
+                    self.has_emoji_font = True
+                except Exception:
+                    self.has_emoji_font = False
+
+    @staticmethod
+    def _is_complex_emoji(char: str) -> bool:
+        """Return True if emoji requires HarfBuzz/Raqm shaping (ZWJ, keycaps, flags)."""
+        return "\u200d" in char or "\u20e3" in char or len(char) > 2
+
+    def get_emoji_image(self, char: str, size: int = 26):
+        """Retrieve PhotoImage for complex emoji using disk/RAM cache."""
+        if not self.has_emoji_font:
+            return None
+
+        key = (char, size)
+        if key in self._img_cache:
+            return self._img_cache[key]
+
+        hex_key = "_".join(f"{ord(c):x}" for c in char)
+        cache_path = os.path.join(IMG_CACHE_DIR, f"{hex_key}_{size}.png")
+
+        # 1. Try disk cache first
+        if os.path.exists(cache_path):
+            try:
+                im = Image.open(cache_path)
+                photo = ImageTk.PhotoImage(im)
+                self._img_cache[key] = photo
+                return photo
+            except Exception:
+                pass
+
+        # 2. Render on demand via Pillow Raqm engine
+        try:
+            with self._font_lock:
+                im = Image.new("RGBA", (136, 128), (0, 0, 0, 0))
+                draw = ImageDraw.Draw(im)
+                draw.text((0, 0), char, font=self.emoji_font, embedded_color=True)
+            im_resized = im.resize((size, size), Image.Resampling.BILINEAR)
+            try:
+                im_resized.save(cache_path)
+            except Exception:
+                pass
+            photo = ImageTk.PhotoImage(im_resized)
+            self._img_cache[key] = photo
+            return photo
+        except Exception:
+            return None
+
+    def _start_background_precache(self):
+        """Pre-render any missing complex emoji PNGs to disk in background."""
+        if not self.has_emoji_font:
+            return
+
+        def _worker():
+            complex_chars = [e["char"] for e in self.all_emojis if self._is_complex_emoji(e.get("char", ""))]
+            for char in set(complex_chars):
+                hex_key = "_".join(f"{ord(c):x}" for c in char)
+                for size in (26, 32):
+                    path = os.path.join(IMG_CACHE_DIR, f"{hex_key}_{size}.png")
+                    if not os.path.exists(path):
+                        try:
+                            with self._font_lock:
+                                im = Image.new("RGBA", (136, 128), (0, 0, 0, 0))
+                                draw = ImageDraw.Draw(im)
+                                draw.text((0, 0), char, font=self.emoji_font, embedded_color=True)
+                            im_res = im.resize((size, size), Image.Resampling.BILINEAR)
+                            im_res.save(path)
+                        except Exception:
+                            pass
+
+        threading.Thread(target=_worker, daemon=True).start()
 
     # ==========================================================================
     # UI Layout & Widgets (Compact Design)
@@ -421,14 +544,17 @@ class EmojiPadApp:
         preview_box = tk.Frame(footer, bg=THEME["bg_card"])
         preview_box.pack(side="left", padx=6)
 
+        char_frame = tk.Frame(preview_box, bg=THEME["bg_card"], width=38, height=38)
+        char_frame.pack_propagate(False)
+        char_frame.pack(side="left", padx=(0, 4))
+
         self.lbl_preview_char = tk.Label(
-            preview_box,
+            char_frame,
             text="✨",
             font=("Noto Color Emoji", 20),
             bg=THEME["bg_card"],
-            width=2,
         )
-        self.lbl_preview_char.pack(side="left", padx=(0, 4))
+        self.lbl_preview_char.pack(expand=True, fill="both")
 
         detail_col = tk.Frame(preview_box, bg=THEME["bg_card"])
         detail_col.pack(side="left")
@@ -599,19 +725,37 @@ class EmojiPadApp:
             yc = (y0 + y1) / 2
 
             tag = f"item_{i}"
+            rect_tag = f"rect_{i}"
             self.canvas.create_rectangle(
                 x0, y0, x1, y1,
                 fill=THEME["bg_card"],
                 outline=THEME["border"],
                 width=1,
-                tags=("card", tag),
+                tags=("card", rect_tag, tag),
             )
-            self.canvas.create_text(
-                xc, yc,
-                text=item["char"],
-                font=("Noto Color Emoji", 18),
-                tags=("text", tag),
-            )
+            char = item["char"]
+            if self._is_complex_emoji(char) and self.has_emoji_font:
+                img = self.get_emoji_image(char, size=26)
+                if img:
+                    self.canvas.create_image(
+                        xc, yc,
+                        image=img,
+                        tags=("image", tag),
+                    )
+                else:
+                    self.canvas.create_text(
+                        xc, yc,
+                        text=char,
+                        font=("Noto Color Emoji", 18),
+                        tags=("text", tag),
+                    )
+            else:
+                self.canvas.create_text(
+                    xc, yc,
+                    text=char,
+                    font=("Noto Color Emoji", 18),
+                    tags=("text", tag),
+                )
 
             self.canvas.tag_bind(tag, "<Enter>", lambda e, idx=i: self._on_card_hover(idx))
             self.canvas.tag_bind(tag, "<Leave>", lambda e, idx=i: self._on_card_unhover(idx))
@@ -675,12 +819,20 @@ class EmojiPadApp:
     def _update_preview(self, item: dict | None):
         """Update bottom preview bar."""
         if not item:
-            self.lbl_preview_char.configure(text="")
+            self.lbl_preview_char.configure(image="", text="")
             self.lbl_preview_name.configure(text="")
             self.lbl_preview_code.configure(text="")
             return
 
-        self.lbl_preview_char.configure(text=item["char"])
+        char = item["char"]
+        if self._is_complex_emoji(char) and self.has_emoji_font:
+            img = self.get_emoji_image(char, size=32)
+            if img:
+                self.lbl_preview_char.configure(image=img, text="")
+            else:
+                self.lbl_preview_char.configure(image="", text=char)
+        else:
+            self.lbl_preview_char.configure(image="", text=char)
         name = item.get("name", "").title()
         if len(name) > 18:
             name = name[:16] + "…"
@@ -695,12 +847,16 @@ class EmojiPadApp:
     # Mouse Events
     # ==========================================================================
     def _on_card_hover(self, idx: int):
-        tag = f"item_{idx}"
-        self.canvas.itemconfigure(tag, fill=THEME["bg_hover"])
+        try:
+            self.canvas.itemconfigure(f"rect_{idx}", fill=THEME["bg_hover"])
+        except Exception:
+            pass
 
     def _on_card_unhover(self, idx: int):
-        tag = f"item_{idx}"
-        self.canvas.itemconfigure(tag, fill=THEME["bg_card"])
+        try:
+            self.canvas.itemconfigure(f"rect_{idx}", fill=THEME["bg_card"])
+        except Exception:
+            pass
 
     def _on_card_click(self, idx: int):
         self.selected_index = idx

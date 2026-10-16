@@ -62,9 +62,29 @@ class PipeWireManager:
         except Exception:
             return sinks, sources, streams
 
+        if isinstance(out, (bytes, bytearray)):
+            try:
+                out = out.decode("utf-8", errors="replace")
+            except Exception:
+                out = ""
+
+        if not out or not isinstance(out, str):
+            return sinks, sources, streams
+
+        in_audio_block = False
         current_section = None
         for line in out.splitlines():
             clean_line = re.sub(r"^[│├└─\s]+", "", line).strip()
+            if clean_line == "Audio":
+                in_audio_block = True
+                continue
+            elif clean_line in ("Video", "Settings") or clean_line.startswith("Filters:"):
+                in_audio_block = False
+                current_section = None
+                continue
+
+            if not in_audio_block:
+                continue
 
             if clean_line.startswith("Sinks:"):
                 current_section = "sinks"
@@ -75,7 +95,7 @@ class PipeWireManager:
             elif clean_line.startswith("Streams:"):
                 current_section = "streams"
                 continue
-            elif clean_line.startswith("Video") or clean_line.startswith("Settings") or clean_line.startswith("Filters:"):
+            elif clean_line.startswith("Filters:"):
                 current_section = None
                 continue
 
@@ -143,10 +163,9 @@ class AudioPadApp:
 
         sw = self.root.winfo_screenwidth()
         sh = self.root.winfo_screenheight()
-        target_w = int(sw * 0.8)
+        target_w = min(1500, int(sw * 0.8))
         target_h = int(sh * 0.88)
         self.root.geometry(f"{target_w}x{target_h}")
-        self.root.minsize(target_w, target_h)
 
         self.sinks = []
         self.sources = []

@@ -191,13 +191,14 @@ class WifiManager:
             except Exception:
                 pass
 
-    def run_cli(self, args: list[str], timeout: int = 5) -> subprocess.CompletedProcess:
+    def run_cli(self, args: list[str], timeout: int = 5, stdin_data: str | None = None) -> subprocess.CompletedProcess:
         """Run wpa_cli with current interface."""
         self._ensure_ctrl_socket()
         cmd = [self.wpa_cli, "-i", self.iface] + args
         try:
             return subprocess.run(
                 cmd,
+                input=stdin_data,
                 capture_output=True,
                 text=True,
                 check=False,
@@ -320,35 +321,50 @@ class WifiManager:
 
         # 2. If not found, add a new network block
         if net_id is None:
+            if net.ssid == "<Hidden Network>":
+                return False, "Cannot connect directly to unnamed hidden network without SSID."
             add_res = self.run_cli(["add_network"])
             if add_res.returncode != 0 or not add_res.stdout.strip().isdigit():
                 return False, f"Failed to allocate network block: {add_res.stderr.strip()}"
             net_id = add_res.stdout.strip()
 
         # 3. Configure network parameters
-        self.run_cli(["set_network", net_id, "ssid", f'"{net.ssid}"'])
+        clean_ssid = net.ssid.replace('\r', '').replace('\n', '')
+        escaped_ssid = clean_ssid.replace('\\', '\\\\').replace('"', '\\"')
+
+        clean_pass = passphrase.replace('\r', '').replace('\n', '') if passphrase else ""
+        escaped_pass = clean_pass.replace('\\', '\\\\').replace('"', '\\"') if clean_pass else ""
+
+        commands = [
+            f'set_network {net_id} ssid "{escaped_ssid}"'
+        ]
 
         if net.security == "Open":
-            self.run_cli(["set_network", net_id, "key_mgmt", "NONE"])
+            commands.append(f'set_network {net_id} key_mgmt NONE')
         elif net.security == "WPA3":
-            self.run_cli(["set_network", net_id, "key_mgmt", "SAE"])
-            if passphrase:
-                self.run_cli(["set_network", net_id, "sae_password", f'"{passphrase}"'])
-            self.run_cli(["set_network", net_id, "ieee80211w", "2"])
+            commands.append(f'set_network {net_id} key_mgmt SAE')
+            if clean_pass:
+                commands.append(f'set_network {net_id} sae_password "{escaped_pass}"')
+            commands.append(f'set_network {net_id} ieee80211w 2')
         elif net.security == "WPA2/WPA3":
-            self.run_cli(["set_network", net_id, "key_mgmt", "WPA-PSK SAE"])
-            if passphrase:
-                self.run_cli(["set_network", net_id, "psk", f'"{passphrase}"'])
-            self.run_cli(["set_network", net_id, "ieee80211w", "1"])
+            commands.append(f'set_network {net_id} key_mgmt WPA-PSK SAE')
+            if clean_pass:
+                commands.append(f'set_network {net_id} psk "{escaped_pass}"')
+            commands.append(f'set_network {net_id} ieee80211w 1')
         else:  # WPA / WPA2
-            self.run_cli(["set_network", net_id, "key_mgmt", "WPA-PSK"])
-            if passphrase:
-                self.run_cli(["set_network", net_id, "psk", f'"{passphrase}"'])
+            commands.append(f'set_network {net_id} key_mgmt WPA-PSK')
+            if clean_pass:
+                commands.append(f'set_network {net_id} psk "{escaped_pass}"')
 
-        # 4. Enable and select network
-        self.run_cli(["enable_network", net_id])
-        self.run_cli(["select_network", net_id])
-        self.run_cli(["reassociate"])
+        commands.extend([
+            f'enable_network {net_id}',
+            f'select_network {net_id}',
+            'reassociate',
+            'quit'
+        ])
+
+        batch_input = "\n".join(commands) + "\n"
+        self.run_cli([], stdin_data=batch_input)
 
         # 5. Monitor association for up to 14 seconds
         start_time = time.time()
@@ -714,10 +730,9 @@ class WifiPadApp:
         # Set initial dimensions to match Qtile DropDown proportions
         sw = self.root.winfo_screenwidth()
         sh = self.root.winfo_screenheight()
-        target_w = int(sw * 0.8)
+        target_w = min(1500, int(sw * 0.8))
         target_h = int(sh * 0.88)
         self.root.geometry(f"{target_w}x{target_h}")
-        self.root.minsize(target_w, target_h)
 
         self.wifi = WifiManager()
         self.networks: list[NetworkInfo] = []
@@ -1032,17 +1047,18 @@ class WifiPadApp:
                 c.set_selected(False)
 
         # Scroll into view if needed
-        if card:
-            bbox = self.canvas.bbox(card.card)
-            if bbox:
-                card_top, card_bot = bbox[1], bbox[3]
-                canvas_h = self.canvas.winfo_height()
-                top_visible = self.canvas.canvasy(0)
-                bot_visible = top_visible + canvas_h
-                if card_top < top_visible:
-                    self.canvas.yview_moveto(card_top / max(1, self.content_frame.winfo_height()))
-                elif card_bot > bot_visible:
-                    self.canvas.yview_moveto((card_bot - canvas_h) / max(1, self.content_frame.winfo_height()))
+        if card and hasattr(card, "card"):
+            self.root.update_idletasks()
+            card_top = card.card.winfo_y()
+            card_bot = card_top + card.card.winfo_height()
+            canvas_h = self.canvas.winfo_height()
+            top_visible = self.canvas.canvasy(0)
+            bot_visible = top_visible + canvas_h
+            content_h = max(1, self.content_frame.winfo_height())
+            if card_top < top_visible:
+                self.canvas.yview_moveto(card_top / content_h)
+            elif card_bot > bot_visible:
+                self.canvas.yview_moveto(max(0.0, (card_bot - canvas_h) / content_h))
 
     # --------------------------------------------------------------------------
     # Connection Flow

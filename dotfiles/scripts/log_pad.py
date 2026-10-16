@@ -34,6 +34,7 @@ Features:
 import sys
 import os
 import re
+import collections
 import subprocess
 import threading
 import tkinter as tk
@@ -137,10 +138,9 @@ class LogPadApp:
         # Target dimensions matching other bench pads (80% width x 88% height)
         sw = self.root.winfo_screenwidth()
         sh = self.root.winfo_screenheight()
-        target_w = int(sw * 0.8)
+        target_w = min(1500, int(sw * 0.8))
         target_h = int(sh * 0.88)
         self.root.geometry(f"{target_w}x{target_h}")
-        self.root.minsize(target_w, target_h)
 
         self.current_source_idx = 0
         self.raw_lines: list[str] = []
@@ -468,34 +468,34 @@ class LogPadApp:
         self.root.bind("<slash>", self._on_slash)
         self.root.bind("q", self._on_q)
         self.root.bind("Q", self._on_q)
-        self.root.bind("r", lambda e: self.refresh_current_source())
-        self.root.bind("R", lambda e: self.refresh_current_source())
-        self.root.bind("f", lambda e: self.toggle_follow_mode())
-        self.root.bind("c", lambda e: self.copy_to_clipboard())
-        self.root.bind("n", lambda e: self.next_search_match())
-        self.root.bind("N", lambda e: self.prev_search_match())
+        self.root.bind("r", lambda e: self.refresh_current_source() if not self._is_search_focused() else None)
+        self.root.bind("R", lambda e: self.refresh_current_source() if not self._is_search_focused() else None)
+        self.root.bind("f", lambda e: self.toggle_follow_mode() if not self._is_search_focused() else None)
+        self.root.bind("c", lambda e: self.copy_to_clipboard() if not self._is_search_focused() else None)
+        self.root.bind("n", lambda e: self.next_search_match() if not self._is_search_focused() else None)
+        self.root.bind("N", lambda e: self.prev_search_match() if not self._is_search_focused() else None)
 
         # Log source switching 1-6
         for i in range(1, len(LOG_SOURCES) + 1):
-            self.root.bind(str(i), lambda e, idx=i-1: self.switch_source(idx))
+            self.root.bind(str(i), lambda e, idx=i-1: self.switch_source(idx) if not self._is_search_focused() else None)
 
         # Tab cycling
         self.root.bind("<Tab>", self._cycle_tabs)
         self.root.bind("<Shift-Tab>", lambda e: self._cycle_tabs(backward=True))
 
         # Vim scrolling
-        self.root.bind("j", lambda e: self._scroll(1))
+        self.root.bind("j", lambda e: self._scroll(1) if not self._is_search_focused() else None)
         self.root.bind("<Down>", lambda e: self._scroll(1))
-        self.root.bind("k", lambda e: self._scroll(-1))
+        self.root.bind("k", lambda e: self._scroll(-1) if not self._is_search_focused() else None)
         self.root.bind("<Up>", lambda e: self._scroll(-1))
-        self.root.bind("d", lambda e: self._scroll(15))
+        self.root.bind("d", lambda e: self._scroll(15) if not self._is_search_focused() else None)
         self.root.bind("<Next>", lambda e: self._scroll(15))
-        self.root.bind("u", lambda e: self._scroll(-15))
+        self.root.bind("u", lambda e: self._scroll(-15) if not self._is_search_focused() else None)
         self.root.bind("<Prior>", lambda e: self._scroll(-15))
-        self.root.bind("g", lambda e: self.text_widget.see("1.0"))
-        self.root.bind("G", lambda e: self.text_widget.see("end"))
-        self.root.bind("<Home>", lambda e: self.text_widget.see("1.0"))
-        self.root.bind("<End>", lambda e: self.text_widget.see("end"))
+        self.root.bind("g", lambda e: self.text_widget.see("1.0") if not self._is_search_focused() else None)
+        self.root.bind("G", lambda e: self.text_widget.see("end") if not self._is_search_focused() else None)
+        self.root.bind("<Home>", lambda e: self.text_widget.see("1.0") if not self._is_search_focused() else None)
+        self.root.bind("<End>", lambda e: self.text_widget.see("end") if not self._is_search_focused() else None)
 
         # Bind Escape inside search entry
         self.search_entry.bind("<Escape>", self._on_search_escape)
@@ -598,9 +598,7 @@ class LogPadApp:
                     path = src["file"]
                     if os.path.exists(path):
                         with open(path, "r", encoding="utf-8", errors="replace") as f:
-                            lines = f.readlines()
-                            # Keep last 600 lines
-                            lines = [l.rstrip("\r\n") for l in lines[-600:]]
+                            lines = [l.rstrip("\r\n") for l in collections.deque(f, maxlen=600)]
                     else:
                         lines = [f"[File not found: {path}]"]
             except Exception as e:
